@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 #[derive(Default)]
 pub struct DnsRecordStore {
@@ -15,7 +15,7 @@ impl DnsRecordStore {
     }
 
     pub fn register(&self, project: &str, deployment: &str, ip: IpAddr) {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write();
         let project_map = entries.entry(project.to_string()).or_default();
         let ips = project_map.entry(deployment.to_string()).or_default();
         if !ips.contains(&ip) {
@@ -24,7 +24,7 @@ impl DnsRecordStore {
     }
 
     pub fn deregister(&self, project: &str, deployment: &str, ip: IpAddr) {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write();
         if let Some(project_map) = entries.get_mut(project) {
             if let Some(ips) = project_map.get_mut(deployment) {
                 ips.retain(|existing| existing != &ip);
@@ -39,7 +39,7 @@ impl DnsRecordStore {
     }
 
     pub fn lookup(&self, project: &str, deployment: &str) -> Vec<IpAddr> {
-        let entries = self.entries.read().unwrap();
+        let entries = self.entries.read();
         entries
             .get(project)
             .and_then(|m| m.get(deployment))
@@ -48,7 +48,7 @@ impl DnsRecordStore {
     }
 
     pub fn lookup_replica(&self, project: &str, deployment: &str, index: usize) -> Option<IpAddr> {
-        let entries = self.entries.read().unwrap();
+        let entries = self.entries.read();
         entries
             .get(project)
             .and_then(|m| m.get(deployment))
@@ -121,7 +121,7 @@ mod tests {
         store.register("app", "web", ip(10, 0, 0, 1));
         store.deregister("app", "web", ip(10, 0, 0, 1));
         assert!(store.lookup("app", "web").is_empty());
-        let entries = store.entries.read().unwrap();
+        let entries = store.entries.read();
         assert!(entries.is_empty());
     }
 

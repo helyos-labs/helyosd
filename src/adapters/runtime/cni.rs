@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use serde::Serialize;
 
@@ -61,11 +61,11 @@ impl SubnetAllocator {
     /// Allocate a /24 subnet for the given network name.
     /// Returns the same subnet if the name was already allocated.
     pub fn allocate(&self, name: &str) -> nexa_core::error::Result<String> {
-        let mut allocs = self.allocations.lock().unwrap();
+        let mut allocs = self.allocations.lock();
         if let Some(&octet) = allocs.get(name) {
             return Ok(format!("172.20.{octet}.0/24"));
         }
-        let mut next = self.next_octet.lock().unwrap();
+        let mut next = self.next_octet.lock();
         if *next == 0 {
             return Err(nexa_core::error::NexaError::Runtime(
                 "subnet pool exhausted (255 /24 networks allocated)".into(),
@@ -79,7 +79,7 @@ impl SubnetAllocator {
 
     /// Release a subnet allocation for the given network name.
     pub fn release(&self, name: &str) {
-        let mut allocs = self.allocations.lock().unwrap();
+        let mut allocs = self.allocations.lock();
         allocs.remove(name);
     }
 }

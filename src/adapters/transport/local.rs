@@ -131,17 +131,17 @@ mod tests {
     use super::*;
 
     struct MockRuntime {
-        containers_created: std::sync::Mutex<Vec<String>>,
+        containers_created: parking_lot::Mutex<Vec<String>>,
     }
 
     impl MockRuntime {
         fn new() -> Self {
             Self {
-                containers_created: std::sync::Mutex::new(Vec::new()),
+                containers_created: parking_lot::Mutex::new(Vec::new()),
             }
         }
         fn created_count(&self) -> usize {
-            self.containers_created.lock().unwrap().len()
+            self.containers_created.lock().len()
         }
     }
 
@@ -155,7 +155,7 @@ mod tests {
         }
         async fn create_container(&self, config: &ContainerConfig) -> Result<String> {
             let id = format!("mock-{}", config.name);
-            self.containers_created.lock().unwrap().push(id.clone());
+            self.containers_created.lock().push(id.clone());
             Ok(id)
         }
         async fn start_container(&self, _id: &str) -> Result<()> {
