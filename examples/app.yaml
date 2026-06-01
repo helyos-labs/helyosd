@@ -16,8 +16,8 @@ network:
   https: true
 
 env:
-  DATABASE_URL: "postgres://localhost/ecommerce"
-  REDIS_URL: "redis://localhost:6379"
+  DATABASE_URL: "postgres://<db-user>:<db-password>@<db-host>:5432/ecommerce"
+  REDIS_URL: "redis://<redis-host>:6379"
 
 healthcheck:
   path: /health

@@ -16,7 +16,7 @@ name = "nexad"
 path = "src/main.rs"
 
 [dependencies]
-nexa-core = { git = "https://github.com/nexa-net/nexa-core", tag = "v0.1.3" }
+nexa-core = { git = "https://github.com/nexa-net/nexa-core", tag = "v0.1.4" }
 prometheus = "0.13"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
