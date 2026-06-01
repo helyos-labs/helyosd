@@ -174,7 +174,7 @@ fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<(Arc<dyn SecretSto
     Ok((secret_store, master_key))
 }
 
-/// Initialise the proxy backend and in-memory route store.
+/// Initialise the proxy backend and SQLite-backed route store.
 fn init_proxy(
     cli: &Cli,
 ) -> anyhow::Result<(
@@ -182,7 +182,7 @@ fn init_proxy(
     Arc<dyn nexa_core::ports::route_store::RouteStore>,
 )> {
     use nexad::adapters::proxy::{CaddyBackend, NginxBackend, TraefikBackend};
-    use nexad::adapters::state::memory_route_store::InMemoryRouteStore;
+    use nexad::adapters::state::SqliteRouteStore;
 
     std::fs::create_dir_all(&cli.proxy_config_dir)?;
 
@@ -201,10 +201,13 @@ fn init_proxy(
         }
     };
 
+    let route_db_path = format!("{}/routes.db", cli.data_dir);
+    let route_conn = rusqlite::Connection::open(&route_db_path)
+        .map_err(|e| anyhow::anyhow!("failed to open routes db: {e}"))?;
     let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
-        Arc::new(InMemoryRouteStore::new());
+        Arc::new(SqliteRouteStore::new(route_conn)?);
 
-    info!(backend = %cli.proxy_backend, "proxy backend initialized");
+    info!(backend = %cli.proxy_backend, path = route_db_path, "proxy backend and route store initialized");
     Ok((proxy, route_store))
 }
 
@@ -492,12 +495,103 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start heartbeat monitor as background task.
     let hb_state = Arc::clone(&store);
+    let reschedule_handle = handle.clone();
+    let reschedule_store = Arc::clone(&store);
     let reschedule: nexad::cluster::heartbeat::RescheduleFn = Arc::new(move |node_id, pods| {
+        use nexa_core::domain::models::PodStatus;
+
         tracing::warn!(
             node_id = %node_id,
             pod_count = pods.len(),
-            "dead node — pods need rescheduling (TODO: implement scheduler)"
+            "dead node — rescheduling pods"
         );
+
+        // Collect unique deployment identifiers from the affected pods.
+        let mut seen_deployments = std::collections::HashSet::new();
+        let mut deployments_to_reschedule: Vec<(String, String)> = Vec::new();
+        for pod in &pods {
+            let key = (pod.project.clone(), pod.deployment_name.clone());
+            if seen_deployments.insert(key.clone()) {
+                deployments_to_reschedule.push(key);
+            }
+        }
+
+        let handle = reschedule_handle.clone();
+        let store = Arc::clone(&reschedule_store);
+
+        // Clone the pods so we can move them into the async task.
+        let dead_pods = pods;
+
+        // The callback is synchronous, so spawn an async task to perform
+        // the actual rescheduling via the orchestrator.
+        tokio::spawn(async move {
+            // 1. Mark all pods from the dead node as Failed in the state store.
+            for pod in &dead_pods {
+                let mut pod_copy = pod.clone();
+                if pod_copy.status == PodStatus::Failed {
+                    continue; // already marked
+                }
+                pod_copy.status = PodStatus::Failed;
+                pod_copy.node_id = None;
+                if let Err(e) = store.update_pod(&pod_copy).await {
+                    tracing::error!(
+                        pod_id = %pod_copy.id,
+                        error = %e,
+                        "failed to mark pod as Failed after node death"
+                    );
+                } else {
+                    tracing::info!(
+                        pod_id = %pod_copy.id,
+                        project = %pod_copy.project,
+                        deployment = %pod_copy.deployment_name,
+                        "marked pod as Failed (node dead)"
+                    );
+                }
+            }
+
+            // 2. For each affected deployment, trigger a redeploy so the
+            //    orchestrator reconciles and places new pods on healthy nodes.
+            for (project, name) in &deployments_to_reschedule {
+                // Fetch the current deployment to get its spec.
+                let deployments = handle.list_deployments(Some(project.clone())).await;
+                let deployment = match deployments.iter().find(|d| d.name() == name) {
+                    Some(d) => d,
+                    None => {
+                        tracing::warn!(
+                            project = %project,
+                            deployment = %name,
+                            "deployment not found during reschedule — skipping"
+                        );
+                        continue;
+                    }
+                };
+
+                tracing::info!(
+                    project = %project,
+                    deployment = %name,
+                    replicas = deployment.spec.replicas,
+                    "redeploying after node death"
+                );
+
+                match handle.deploy(deployment.spec.clone()).await {
+                    Ok(_) => {
+                        tracing::info!(
+                            project = %project,
+                            deployment = %name,
+                            "reschedule deploy succeeded"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            project = %project,
+                            deployment = %name,
+                            error = %e,
+                            "reschedule deploy failed"
+                        );
+                    }
+                }
+            }
+        });
     });
     tokio::spawn(async move {
         nexad::cluster::heartbeat::run_monitor(hb_state, reschedule).await;
