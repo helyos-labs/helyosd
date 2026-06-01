@@ -68,7 +68,7 @@ mod tests {
     #[tokio::test]
     async fn renewal_task_starts_and_can_be_cancelled() {
         let store = Arc::new(InMemoryRouteStore::new());
-        let acme = Arc::new(AcmeManager::new("test@example.com", store.clone(), true));
+        let acme = Arc::new(AcmeManager::new("test@example.com", store.clone(), true, &[0xAB; 32]));
 
         let handle = spawn_renewal_task(store, acme, Duration::from_millis(50), 30);
 
@@ -92,7 +92,7 @@ mod tests {
         };
         store.upsert_certificate(&cert).await.unwrap();
 
-        let acme = Arc::new(AcmeManager::new("test@example.com", store.clone(), true));
+        let acme = Arc::new(AcmeManager::new("test@example.com", store.clone(), true, &[0xAB; 32]));
 
         let handle = spawn_renewal_task(store.clone(), acme, Duration::from_millis(50), 30);
 

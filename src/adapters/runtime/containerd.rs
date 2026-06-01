@@ -134,6 +134,11 @@ impl ContainerdRuntime {
     fn stdout_log_path(&self, container_id: &str) -> PathBuf {
         self.log_dir(container_id).join("stdout.log")
     }
+
+    /// Path to the stderr log file for a container.
+    fn stderr_log_path(&self, container_id: &str) -> PathBuf {
+        self.log_dir(container_id).join("stderr.log")
+    }
 }
 
 #[async_trait]
@@ -203,14 +208,39 @@ impl ContainerRuntime for ContainerdRuntime {
     async fn start_container(&self, id: &str) -> Result<()> {
         debug!(id, "starting container task via ctr");
 
-        // Start the task and redirect stdout/stderr to log files.
-        let log_path = self.stdout_log_path(id);
-        let log_path_str = log_path.to_string_lossy().to_string();
+        // Ensure log files exist so containerd can write to them.
+        let stdout_log = self.stdout_log_path(id);
+        let stderr_log = self.stderr_log_path(id);
+        for log_file in [&stdout_log, &stderr_log] {
+            if let Some(parent) = log_file.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| NexaError::Runtime(format!("create log dir: {e}")))?;
+            }
+            tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_file)
+                .await
+                .map_err(|e| {
+                    NexaError::Runtime(format!("create log file {}: {e}", log_file.display()))
+                })?;
+        }
 
+        let stdout_uri = format!("file://{}", stdout_log.to_string_lossy());
+        let stderr_uri = format!("file://{}", stderr_log.to_string_lossy());
+
+        // Start the task and redirect stdout/stderr to log files via
+        // containerd's log-uri mechanism.
         let output = Command::new("ctr")
             .arg("--namespace")
             .arg(&self.namespace)
-            .args(["tasks", "start", "--detach", id])
+            .args(["tasks", "start", "--detach"])
+            .arg("--log-uri")
+            .arg(&stdout_uri)
+            .arg("--stderr-uri")
+            .arg(&stderr_uri)
+            .arg(id)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .output()
@@ -236,7 +266,7 @@ impl ContainerRuntime for ContainerdRuntime {
             netns.insert(id.to_string(), netns_path.clone());
             debug!(id, netns = %netns_path, "recorded netns for container");
         } else {
-            debug!(id, stdout = %pid, log = %log_path_str, "could not parse PID from ctr output");
+            debug!(id, stdout = %pid, log = %stdout_uri, "could not parse PID from ctr output");
         }
 
         debug!(id, "container task started");

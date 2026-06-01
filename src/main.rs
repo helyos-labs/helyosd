@@ -158,8 +158,9 @@ async fn init_infrastructure(
 }
 
 /// Load or generate the master encryption key and create the encrypted secret
-/// store.
-fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<Arc<dyn SecretStore>> {
+/// store.  Returns the store **and** the raw master key so that other
+/// subsystems (e.g. TLS certificate storage) can reuse it.
+fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<(Arc<dyn SecretStore>, [u8; 32])> {
     let master_key = nexad::crypto::master_key::load_or_generate(data_dir)?;
     info!("master key loaded");
 
@@ -170,7 +171,7 @@ fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<Arc<dyn SecretStor
     );
     info!("secret store initialized");
 
-    Ok(secret_store)
+    Ok((secret_store, master_key))
 }
 
 /// Initialise the proxy backend and in-memory route store.
@@ -353,7 +354,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     );
 
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
-    let secret_store = init_secrets(cli, &data_dir)?;
+    let (secret_store, master_key) = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
@@ -376,6 +377,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
             email,
             Arc::clone(&route_store),
             false,
+            &master_key,
         ));
         nexad::adapters::tls::spawn_renewal_task(
             Arc::clone(&route_store),
@@ -402,7 +404,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     );
 
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
-    let secret_store = init_secrets(cli, &data_dir)?;
+    let (secret_store, master_key) = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
@@ -425,6 +427,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
             email,
             Arc::clone(&route_store),
             false,
+            &master_key,
         ));
         nexad::adapters::tls::spawn_renewal_task(
             Arc::clone(&route_store),
