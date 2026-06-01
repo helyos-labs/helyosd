@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use serde::Serialize;
 
 /// Manages CNI network configurations for containerd.
+///
+/// **Experimental**: `attach`/`detach` are stubs pending CNI plugin execution support.
 pub struct CniManager {
     cni_bin_dir: PathBuf,
     cni_conf_dir: PathBuf,

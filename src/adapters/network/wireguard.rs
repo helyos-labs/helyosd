@@ -7,6 +7,8 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 use nexa_core::error::Result;
 
+/// **Experimental**: WireGuard overlay uses boringtun userspace mode.
+/// `create_tunnel` currently only logs — actual tunnel creation is not yet implemented.
 #[derive(Debug, Clone)]
 pub struct WgKeypair {
     pub private_key: [u8; 32],
