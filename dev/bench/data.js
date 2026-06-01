@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779720943947,
+  "lastUpdate": 1780304952367,
   "repoUrl": "https://github.com/nexa-net/nexad",
   "entries": {
     "Benchmark": [
@@ -863,6 +863,102 @@ window.BENCHMARK_DATA = {
             "name": "list_pods/1000",
             "value": 4242943,
             "range": "± 489056",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "committer": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "distinct": true,
+          "id": "06007454ac4bdc6203710fadadc57774af45e795",
+          "message": "refactor: remove nexa-proxy backend, default to traefik\n\nnexa-proxy crate has been removed in favor of established reverse\nproxies. Traefik is now the default proxy backend, with Nginx and\nCaddy as alternatives.",
+          "timestamp": "2026-06-01T11:01:48+02:00",
+          "tree_id": "df3e871cccca455c90caf07730e253ac8ec6a528",
+          "url": "https://github.com/nexa-net/nexad/commit/06007454ac4bdc6203710fadadc57774af45e795"
+        },
+        "date": 1780304952056,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "encrypt/64B",
+            "value": 6806,
+            "range": "± 87",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/1KB",
+            "value": 8265,
+            "range": "± 541",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/64KB",
+            "value": 106760,
+            "range": "± 8821",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/64B",
+            "value": 3332,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/1KB",
+            "value": 4324,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/10",
+            "value": 209,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/100",
+            "value": 213,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/1000",
+            "value": 220,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_register_deregister",
+            "value": 230,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "insert_pod",
+            "value": 458413,
+            "range": "± 21982",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/100",
+            "value": 481900,
+            "range": "± 57667",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/1000",
+            "value": 3781170,
+            "range": "± 412088",
             "unit": "ns/iter"
           }
         ]
