@@ -170,7 +170,7 @@ pub async fn run_heartbeat_sender(
             let resources = collect_resources();
             let ping = proto::HeartbeatPing {
                 node_id: node_id.to_string(),
-                status: "ready".into(),
+                status: proto::NodeStatusProto::NodeStatusReady.into(),
                 resources: Some(proto::ResourceInfo {
                     cpu_cores: resources.cpu_cores,
                     memory_bytes: resources.memory_bytes,

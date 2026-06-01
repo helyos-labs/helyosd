@@ -25,9 +25,33 @@ message RegisterResponse {
     string message = 3;
 }
 
+enum NodeStatusProto {
+    NODE_STATUS_UNKNOWN = 0;
+    NODE_STATUS_READY = 1;
+    NODE_STATUS_NOT_READY = 2;
+    NODE_STATUS_DRAINING = 3;
+}
+
+enum PodStatusProto {
+    POD_STATUS_UNKNOWN = 0;
+    POD_STATUS_PENDING = 1;
+    POD_STATUS_CREATING = 2;
+    POD_STATUS_RUNNING = 3;
+    POD_STATUS_STOPPED = 4;
+    POD_STATUS_FAILED = 5;
+}
+
+enum PodActionType {
+    POD_ACTION_UNKNOWN = 0;
+    POD_ACTION_START = 1;
+    POD_ACTION_STOP = 2;
+    POD_ACTION_REMOVE = 3;
+    POD_ACTION_RESTART = 4;
+}
+
 message HeartbeatPing {
     string node_id = 1;
-    string status = 2;
+    NodeStatusProto status = 2;
     ResourceInfo resources = 3;
     repeated PodStatusInfo pod_statuses = 4;
 }
@@ -38,7 +62,7 @@ message HeartbeatPong {
 }
 
 message PodAction {
-    string action = 1;
+    PodActionType action = 1;
     string pod_id = 2;
     bytes pod_spec = 3;
     bytes pod_data = 4;
@@ -54,7 +78,7 @@ message ResourceInfo {
 
 message PodStatusInfo {
     string pod_id = 1;
-    string status = 2;
+    PodStatusProto status = 2;
     string container_id = 3;
 }
 

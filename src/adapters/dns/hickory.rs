@@ -1,20 +1,85 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use tokio::net::{TcpListener, UdpSocket};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use nexa_core::error::{NexaError, Result};
 use nexa_core::ports::dns::DnsProvider;
 
 use super::record_store::DnsRecordStore;
 
+/// Simple token-bucket rate limiter for DNS queries, keyed by source IP.
+///
+/// Each source IP gets a bucket that refills at `max_qps` tokens per second,
+/// up to a burst of `max_qps` tokens. A query is allowed only when a token
+/// is available.
+#[allow(dead_code)]
+struct DnsRateLimiter {
+    max_qps: u32,
+    buckets: Mutex<HashMap<IpAddr, TokenBucket>>,
+}
+
+#[allow(dead_code)]
+struct TokenBucket {
+    tokens: f64,
+    last_refill: Instant,
+}
+
+impl DnsRateLimiter {
+    fn new(max_qps: u32) -> Self {
+        Self {
+            max_qps,
+            buckets: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Returns `true` if the query is allowed, `false` if rate-limited.
+    fn check(&self, source: IpAddr) -> bool {
+        let now = Instant::now();
+        let max = self.max_qps as f64;
+        let mut buckets = self.buckets.lock();
+
+        let bucket = buckets.entry(source).or_insert(TokenBucket {
+            tokens: max,
+            last_refill: now,
+        });
+
+        // Refill tokens based on elapsed time
+        let elapsed = now.duration_since(bucket.last_refill).as_secs_f64();
+        bucket.tokens = (bucket.tokens + elapsed * max).min(max);
+        bucket.last_refill = now;
+
+        if bucket.tokens >= 1.0 {
+            bucket.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove stale entries that have not been seen for over 60 seconds.
+    /// Called periodically to prevent unbounded memory growth.
+    fn evict_stale(&self) {
+        let cutoff = Instant::now() - Duration::from_secs(60);
+        let mut buckets = self.buckets.lock();
+        buckets.retain(|_, b| b.last_refill > cutoff);
+    }
+}
+
+/// Default maximum DNS queries per second per source IP.
+const DEFAULT_DNS_MAX_QPS: u32 = 1000;
+
 pub struct HickoryDnsProvider {
     store: Arc<DnsRecordStore>,
     listen_addr: SocketAddr,
     upstream_dns: SocketAddr,
+    #[allow(dead_code)]
+    rate_limiter: Arc<DnsRateLimiter>,
 }
 
 impl HickoryDnsProvider {
@@ -23,6 +88,7 @@ impl HickoryDnsProvider {
             store: Arc::new(DnsRecordStore::new()),
             listen_addr,
             upstream_dns,
+            rate_limiter: Arc::new(DnsRateLimiter::new(DEFAULT_DNS_MAX_QPS)),
         }
     }
 
@@ -49,14 +115,28 @@ impl HickoryDnsProvider {
 
         info!(%listen_addr, %upstream_dns, "starting embedded DNS server");
 
+        // Periodically evict stale rate-limiter entries to bound memory usage.
+        let evict_limiter = self.rate_limiter.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                evict_limiter.evict_stale();
+            }
+        });
+
         let udp_store = store.clone();
         let udp_upstream = upstream_dns;
         let udp_fwd_socket = udp_upstream_socket.clone();
+        let udp_limiter = self.rate_limiter.clone();
         tokio::spawn(async move {
             let mut buf = vec![0u8; 4096];
             loop {
                 match udp_socket.recv_from(&mut buf).await {
                     Ok((len, src)) => {
+                        if !udp_limiter.check(src.ip()) {
+                            warn!(source = %src.ip(), "DNS rate limit exceeded, dropping query");
+                            continue;
+                        }
                         let data = buf[..len].to_vec();
                         let response =
                             handle_dns_query(&data, &udp_store, udp_upstream, &udp_fwd_socket)
@@ -77,10 +157,15 @@ impl HickoryDnsProvider {
         let tcp_store = store.clone();
         let tcp_upstream = upstream_dns;
         let tcp_fwd_socket = udp_upstream_socket.clone();
+        let tcp_limiter = self.rate_limiter.clone();
         tokio::spawn(async move {
             loop {
                 match tcp_listener.accept().await {
-                    Ok((stream, _addr)) => {
+                    Ok((stream, addr)) => {
+                        if !tcp_limiter.check(addr.ip()) {
+                            warn!(source = %addr.ip(), "DNS rate limit exceeded, dropping TCP connection");
+                            continue;
+                        }
                         let store = tcp_store.clone();
                         let fwd_socket = tcp_fwd_socket.clone();
                         tokio::spawn(async move {

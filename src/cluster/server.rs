@@ -117,9 +117,9 @@ impl ClusterService for ClusterServer {
                 };
                 if let Ok(Some(mut node)) = state.get_node(&node_id).await {
                     node.last_heartbeat = chrono::Utc::now();
-                    node.status = match ping.status.as_str() {
-                        "ready" => NodeStatus::Ready,
-                        "draining" => NodeStatus::Draining,
+                    node.status = match ping.status() {
+                        proto::NodeStatusProto::NodeStatusReady => NodeStatus::Ready,
+                        proto::NodeStatusProto::NodeStatusDraining => NodeStatus::Draining,
                         _ => NodeStatus::NotReady,
                     };
                     if let Some(res) = &ping.resources {
@@ -296,7 +296,7 @@ impl ClusterService for ClusterServer {
             info!(
                 node_id = %node_id,
                 pod_id = ps.pod_id,
-                status = ps.status,
+                status = ?ps.status(),
                 "status report from worker"
             );
         }
