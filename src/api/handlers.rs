@@ -280,10 +280,7 @@ pub async fn cluster_init(State(state): AppStateExtractor) -> impl IntoResponse 
         .set_cluster_config("join_token_hash", &hash)
         .await
     {
-        Ok(()) => {
-            let _ = state.store.set_cluster_config("join_token", &token).await;
-            Json(serde_json::json!({ "token": token })).into_response()
-        }
+        Ok(()) => Json(serde_json::json!({ "token": token })).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -293,8 +290,14 @@ pub async fn cluster_init(State(state): AppStateExtractor) -> impl IntoResponse 
 }
 
 pub async fn cluster_token_show(State(state): AppStateExtractor) -> impl IntoResponse {
-    match state.store.get_cluster_config("join_token").await {
-        Ok(Some(token)) => Json(serde_json::json!({ "token": token })).into_response(),
+    match state.store.get_cluster_config("join_token_hash").await {
+        Ok(Some(_)) => (
+            StatusCode::GONE,
+            Json(serde_json::json!({
+                "error": "token is only shown at creation. Use POST /api/v1/cluster/token/rotate to generate a new one."
+            })),
+        )
+            .into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "cluster not initialized" })),
@@ -316,10 +319,7 @@ pub async fn cluster_token_rotate(State(state): AppStateExtractor) -> impl IntoR
         .set_cluster_config("join_token_hash", &hash)
         .await
     {
-        Ok(()) => {
-            let _ = state.store.set_cluster_config("join_token", &token).await;
-            Json(serde_json::json!({ "token": token })).into_response()
-        }
+        Ok(()) => Json(serde_json::json!({ "token": token })).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
