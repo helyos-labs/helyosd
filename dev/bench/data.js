@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780324703482,
+  "lastUpdate": 1780348624351,
   "repoUrl": "https://github.com/nexa-net/nexad",
   "entries": {
     "Benchmark": [
@@ -1151,6 +1151,102 @@ window.BENCHMARK_DATA = {
             "name": "list_pods/1000",
             "value": 4043080,
             "range": "± 470319",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "committer": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "distinct": true,
+          "id": "94f9254ac31c6e57c598281ff354ba9edeb37835",
+          "message": "ci: add macOS to test matrix",
+          "timestamp": "2026-06-01T23:05:20+02:00",
+          "tree_id": "bba9a717f4371172a90b108388eb7da2be43ef15",
+          "url": "https://github.com/nexa-net/nexad/commit/94f9254ac31c6e57c598281ff354ba9edeb37835"
+        },
+        "date": 1780348623813,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "encrypt/64B",
+            "value": 6855,
+            "range": "± 81",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/1KB",
+            "value": 8273,
+            "range": "± 531",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/64KB",
+            "value": 107518,
+            "range": "± 8837",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/64B",
+            "value": 3276,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/1KB",
+            "value": 4279,
+            "range": "± 19",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/10",
+            "value": 194,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/100",
+            "value": 195,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/1000",
+            "value": 204,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_register_deregister",
+            "value": 231,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "insert_pod",
+            "value": 491501,
+            "range": "± 27313",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/100",
+            "value": 503085,
+            "range": "± 67093",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/1000",
+            "value": 3749454,
+            "range": "± 459082",
             "unit": "ns/iter"
           }
         ]
