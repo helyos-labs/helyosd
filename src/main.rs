@@ -31,7 +31,7 @@ fn default_proxy_config_dir() -> String {
 #[derive(Parser)]
 #[command(name = "nexad", about = "NexaNet daemon", version)]
 struct Cli {
-    #[arg(long, default_value = "0.0.0.0")]
+    #[arg(long, default_value = "127.0.0.1")]
     host: String,
 
     #[arg(long, default_value = "6443")]
@@ -65,7 +65,7 @@ struct Cli {
     master_ip: Option<String>,
 
     /// DNS listen address for embedded DNS server
-    #[arg(long, default_value = "0.0.0.0:15353")]
+    #[arg(long, default_value = "127.0.0.1:15353")]
     dns_listen: String,
 
     /// Upstream DNS server for forwarding non-.internal queries
