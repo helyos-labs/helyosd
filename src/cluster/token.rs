@@ -17,7 +17,18 @@ pub fn hash_token(token: &str) -> String {
 }
 
 pub fn verify_token(token: &str, stored_hash: &str) -> bool {
-    hash_token(token) == stored_hash
+    let computed = hash_token(token);
+    constant_time_eq(computed.as_bytes(), stored_hash.as_bytes())
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 pub fn validate_token_format(token: &str) -> Result<()> {

@@ -55,14 +55,8 @@ impl ClusterTransport for LocalTransport {
             let _ = self.runtime.remove_container(&container_name, true).await;
         }
 
-        if !self
-            .runtime
-            .container_exists(&network_name)
-            .await
-            .unwrap_or(false)
-        {
-            let _ = self.runtime.create_network(&network_name).await;
-        }
+        // Ignore error if network already exists.
+        let _ = self.runtime.create_network(&network_name).await;
 
         let ports: Vec<PortBinding> = spec
             .ports

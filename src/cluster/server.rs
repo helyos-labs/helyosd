@@ -174,14 +174,7 @@ impl ClusterService for ClusterServer {
             let _ = self.runtime.remove_container(&container_name, true).await;
         }
 
-        if !self
-            .runtime
-            .container_exists(&network_name)
-            .await
-            .unwrap_or(false)
-        {
-            let _ = self.runtime.create_network(&network_name).await;
-        }
+        let _ = self.runtime.create_network(&network_name).await;
 
         use nexa_core::ports::runtime::*;
 
@@ -254,6 +247,15 @@ impl ClusterService for ClusterServer {
     ) -> std::result::Result<Response<proto::StopPodResponse>, Status> {
         let req = request.into_inner();
         info!(pod_id = req.pod_id, "worker: stopping pod");
+
+        if let Err(e) = self.runtime.stop_container(&req.pod_id, 10).await {
+            warn!(pod_id = req.pod_id, error = %e, "failed to stop pod");
+            return Ok(Response::new(proto::StopPodResponse {
+                success: false,
+                message: format!("stop failed: {e}"),
+            }));
+        }
+
         Ok(Response::new(proto::StopPodResponse {
             success: true,
             message: "stopped".into(),
@@ -266,6 +268,17 @@ impl ClusterService for ClusterServer {
     ) -> std::result::Result<Response<proto::RemovePodResponse>, Status> {
         let req = request.into_inner();
         info!(pod_id = req.pod_id, "worker: removing pod");
+
+        let _ = self.runtime.stop_container(&req.pod_id, 5).await;
+
+        if let Err(e) = self.runtime.remove_container(&req.pod_id, true).await {
+            warn!(pod_id = req.pod_id, error = %e, "failed to remove pod");
+            return Ok(Response::new(proto::RemovePodResponse {
+                success: false,
+                message: format!("remove failed: {e}"),
+            }));
+        }
+
         Ok(Response::new(proto::RemovePodResponse {
             success: true,
             message: "removed".into(),
@@ -297,9 +310,29 @@ impl ClusterService for ClusterServer {
         &self,
         request: Request<proto::LogsRequest>,
     ) -> std::result::Result<Response<Self::StreamLogsStream>, Status> {
-        let _req = request.into_inner();
+        let req = request.into_inner();
+        let tail = if req.tail > 0 { Some(req.tail) } else { None };
+        let log_stream = self
+            .runtime
+            .logs(&req.pod_id, tail)
+            .await
+            .map_err(|e| Status::internal(format!("failed to get logs: {e}")))?;
+
         let (tx, rx) = mpsc::channel(64);
-        drop(tx); // Empty stream for now
+        tokio::spawn(async move {
+            use futures::StreamExt;
+            let mut stream = log_stream;
+            while let Some(result) = stream.next().await {
+                match result {
+                    Ok(line) => {
+                        if tx.send(Ok(proto::LogChunk { line })).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
         let out_stream = ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(out_stream)))
     }
