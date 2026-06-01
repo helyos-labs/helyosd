@@ -72,8 +72,8 @@ struct Cli {
     #[arg(long, default_value = "8.8.8.8:53")]
     dns_upstream: String,
 
-    /// Proxy backend: "nexa-proxy", "nginx", "caddy", "traefik"
-    #[arg(long, default_value = "nexa-proxy")]
+    /// Proxy backend: "nginx", "caddy", "traefik"
+    #[arg(long, default_value = "traefik")]
     proxy_backend: String,
 
     /// Proxy config directory
@@ -175,7 +175,7 @@ fn init_proxy(
     Arc<dyn nexa_core::ports::proxy::ProxyBackend>,
     Arc<dyn nexa_core::ports::route_store::RouteStore>,
 )> {
-    use nexad::adapters::proxy::{CaddyBackend, NexaProxyBackend, NginxBackend, TraefikBackend};
+    use nexad::adapters::proxy::{CaddyBackend, NginxBackend, TraefikBackend};
     use nexad::adapters::state::memory_route_store::InMemoryRouteStore;
 
     std::fs::create_dir_all(&cli.proxy_config_dir)?;
@@ -189,18 +189,9 @@ fn init_proxy(
             let caddyfile = PathBuf::from(&cli.proxy_config_dir).join("Caddyfile");
             Arc::new(CaddyBackend::new(caddyfile, "http://localhost:2019".into()))
         }
-        "traefik" => {
+        "traefik" | _ => {
             let config_path = PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
             Arc::new(TraefikBackend::new(config_path))
-        }
-        _ => {
-            let config_path = PathBuf::from(&cli.proxy_config_dir).join("proxy.json");
-            Arc::new(NexaProxyBackend::new(
-                config_path,
-                "nexa-proxy",
-                "0.0.0.0:80",
-                Some("0.0.0.0:443".into()),
-            ))
         }
     };
 

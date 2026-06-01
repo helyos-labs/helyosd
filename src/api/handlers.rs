@@ -570,7 +570,7 @@ pub struct ProxyConfigResponse {
 
 pub async fn get_proxy_config(State(_state): AppStateExtractor) -> impl IntoResponse {
     Json(ProxyConfigResponse {
-        backend: "nexa-proxy".into(),
+        backend: "traefik".into(),
         acme_email: None,
     })
 }
@@ -586,7 +586,7 @@ pub async fn set_proxy_config(
     Json(req): Json<SetProxyConfigRequest>,
 ) -> impl IntoResponse {
     Json(serde_json::json!({
-        "backend": req.backend.unwrap_or("nexa-proxy".into()),
+        "backend": req.backend.unwrap_or("traefik".into()),
         "acme_email": req.acme_email,
         "status": "updated"
     }))
