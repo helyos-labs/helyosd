@@ -133,9 +133,27 @@ pub fn collect_resources() -> NodeResources {
 
 /// Runs on a worker. Opens a bidirectional heartbeat stream to the master and
 /// sends periodic pings. Returns only on connection failure.
-pub async fn run_heartbeat_sender(master_addr: String, node_id: Uuid) -> anyhow::Result<()> {
-    let endpoint = format!("http://{}", master_addr);
-    let mut client = ClusterServiceClient::connect(endpoint).await?;
+pub async fn run_heartbeat_sender(
+    master_addr: String,
+    node_id: Uuid,
+    tls_config: Option<tonic::transport::ClientTlsConfig>,
+) -> anyhow::Result<()> {
+    let channel = if let Some(tls) = tls_config {
+        let endpoint = format!("https://{}", master_addr);
+        tonic::transport::Channel::from_shared(endpoint)
+            .map_err(|e| anyhow::anyhow!("invalid endpoint: {e}"))?
+            .tls_config(tls)
+            .map_err(|e| anyhow::anyhow!("TLS config error: {e}"))?
+            .connect()
+            .await?
+    } else {
+        let endpoint = format!("http://{}", master_addr);
+        tonic::transport::Channel::from_shared(endpoint)
+            .map_err(|e| anyhow::anyhow!("invalid endpoint: {e}"))?
+            .connect()
+            .await?
+    };
+    let mut client = ClusterServiceClient::new(channel);
 
     let (tx, rx) = tokio::sync::mpsc::channel::<proto::HeartbeatPing>(32);
 

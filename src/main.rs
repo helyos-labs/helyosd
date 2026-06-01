@@ -475,6 +475,10 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         }
     };
 
+    // Generate or load self-signed TLS certificates for gRPC.
+    let grpc_tls_certs = nexad::cluster::tls::load_or_generate(&data_dir)?;
+    let server_tls_config = grpc_tls_certs.server_tls_config()?;
+
     // Start gRPC server as background task.
     let grpc_addr = format!("{}:{}", cli.host, cli.grpc_port);
     let grpc_runtime = Arc::clone(&runtime);
@@ -486,6 +490,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
             grpc_runtime,
             grpc_state,
             grpc_token_hash,
+            Some(server_tls_config),
         )
         .await
         {
@@ -648,5 +653,24 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
 
     let listen_addr = format!("{}:{}", cli.host, cli.grpc_port);
 
-    nexad::cluster::worker::start_worker(master_addr, token, listen_addr, runtime, store).await
+    // Load the CA certificate for TLS verification when connecting to the master.
+    // If the CA cert file exists in the data directory, enable TLS; otherwise
+    // fall back to plaintext (useful for development/testing).
+    let data_dir = PathBuf::from(&cli.data_dir);
+    let ca_cert_path = nexad::cluster::tls::ca_cert_path(&data_dir);
+    let client_tls = if ca_cert_path.exists() {
+        let ca_pem = std::fs::read(&ca_cert_path)
+            .map_err(|e| anyhow::anyhow!("failed to read CA cert: {e}"))?;
+        let ca = tonic::transport::Certificate::from_pem(ca_pem);
+        let config = tonic::transport::ClientTlsConfig::new()
+            .ca_certificate(ca)
+            .domain_name("nexanet");
+        info!("worker TLS enabled (CA cert loaded)");
+        Some(config)
+    } else {
+        info!("no CA cert found — connecting to master without TLS");
+        None
+    };
+
+    nexad::cluster::worker::start_worker(master_addr, token, listen_addr, runtime, store, client_tls).await
 }

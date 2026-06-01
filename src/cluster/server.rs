@@ -343,14 +343,25 @@ pub async fn start_grpc_server(
     runtime: Arc<dyn ContainerRuntime>,
     state: Arc<dyn StateStore>,
     token_hash: String,
+    tls_config: Option<tonic::transport::ServerTlsConfig>,
 ) -> anyhow::Result<()> {
     use proto::cluster_service_server::ClusterServiceServer;
 
     let service = ClusterServer::new(runtime, state, token_hash);
     let addr = addr.parse().map_err(|e| anyhow::anyhow!("bad addr: {e}"))?;
-    info!("gRPC cluster server listening on {addr}");
 
-    tonic::transport::Server::builder()
+    let mut builder = tonic::transport::Server::builder();
+
+    if let Some(tls) = tls_config {
+        info!("gRPC cluster server listening on {addr} (TLS enabled)");
+        builder = builder
+            .tls_config(tls)
+            .map_err(|e| anyhow::anyhow!("TLS config error: {e}"))?;
+    } else {
+        info!("gRPC cluster server listening on {addr} (plaintext)");
+    }
+
+    builder
         .add_service(ClusterServiceServer::new(service))
         .serve(addr)
         .await?;

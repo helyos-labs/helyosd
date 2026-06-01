@@ -43,7 +43,8 @@ rand = "0.8"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 base64 = "0.22"
 rusqlite = { version = "0.32", features = ["bundled"] }
-tonic = "0.12"
+tonic = { version = "0.12", features = ["tls"] }
+rcgen = "0.13"
 prost = "0.13"
 sha2 = "0.10"
 hex = "0.4"

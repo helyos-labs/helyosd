@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tonic::transport::Channel;
 use tracing::{error, info};
 
 use nexa_core::ports::runtime::ContainerRuntime;
@@ -23,6 +24,7 @@ pub async fn start_worker(
     listen_addr: String,
     runtime: Arc<dyn ContainerRuntime>,
     state: Arc<dyn StateStore>,
+    tls_config: Option<tonic::transport::ClientTlsConfig>,
 ) -> anyhow::Result<()> {
     // 1. Collect hostname and system resources.
     let hostname = hostname::get()
@@ -39,8 +41,24 @@ pub async fn start_worker(
     );
 
     // 2. Register with master.
-    let endpoint = format!("http://{}", master_addr);
-    let mut client = ClusterServiceClient::connect(endpoint).await?;
+    let channel = if let Some(ref tls) = tls_config {
+        info!("connecting to master with TLS");
+        let endpoint = format!("https://{}", master_addr);
+        Channel::from_shared(endpoint)
+            .map_err(|e| anyhow::anyhow!("invalid endpoint: {e}"))?
+            .tls_config(tls.clone())
+            .map_err(|e| anyhow::anyhow!("TLS config error: {e}"))?
+            .connect()
+            .await?
+    } else {
+        info!("connecting to master without TLS");
+        let endpoint = format!("http://{}", master_addr);
+        Channel::from_shared(endpoint)
+            .map_err(|e| anyhow::anyhow!("invalid endpoint: {e}"))?
+            .connect()
+            .await?
+    };
+    let mut client = ClusterServiceClient::new(channel);
 
     let register_req = proto::RegisterRequest {
         node_name: hostname.clone(),
@@ -74,16 +92,21 @@ pub async fn start_worker(
     let grpc_runtime = Arc::clone(&runtime);
     let grpc_addr = listen_addr.clone();
     let grpc_handle = tokio::spawn(async move {
-        if let Err(e) = start_grpc_server(&grpc_addr, grpc_runtime, grpc_state, token_hash).await {
+        if let Err(e) =
+            start_grpc_server(&grpc_addr, grpc_runtime, grpc_state, token_hash, None).await
+        {
             error!(error = %e, "worker gRPC server failed");
         }
     });
 
     // 4. Start heartbeat loop.
     let hb_master = master_addr.clone();
+    let hb_tls = tls_config.clone();
     let heartbeat_handle = tokio::spawn(async move {
         loop {
-            if let Err(e) = heartbeat::run_heartbeat_sender(hb_master.clone(), node_id).await {
+            if let Err(e) =
+                heartbeat::run_heartbeat_sender(hb_master.clone(), node_id, hb_tls.clone()).await
+            {
                 error!(error = %e, "heartbeat stream disconnected, reconnecting in 5s");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
