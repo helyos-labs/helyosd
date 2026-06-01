@@ -552,8 +552,9 @@ mod tests {
     async fn forward_to_upstream_resolves_external_domain() {
         let upstream: SocketAddr = "8.8.8.8:53".parse().unwrap();
         let query = build_test_dns_query("www.google.com");
+        let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-        let response = forward_to_upstream(&query, upstream).await;
+        let response = forward_to_upstream(&query, upstream, &socket).await;
         assert!(response.is_some(), "upstream should return a response");
 
         let resp = response.unwrap();
@@ -564,5 +565,31 @@ mod tests {
 
         let rcode = flags & 0x000F;
         assert_eq!(rcode, 0, "should be NOERROR");
+    }
+
+    #[test]
+    fn rate_limiter_allows_within_limit() {
+        let limiter = DnsRateLimiter::new(10);
+        let ip = ip4(192, 168, 1, 1);
+        // Should allow up to 10 queries in quick succession (initial burst)
+        for _ in 0..10 {
+            assert!(limiter.check(ip));
+        }
+        // 11th should be rejected (no time for refill)
+        assert!(!limiter.check(ip));
+    }
+
+    #[test]
+    fn rate_limiter_independent_per_ip() {
+        let limiter = DnsRateLimiter::new(5);
+        let ip_a = ip4(10, 0, 0, 1);
+        let ip_b = ip4(10, 0, 0, 2);
+        for _ in 0..5 {
+            assert!(limiter.check(ip_a));
+        }
+        // ip_a is exhausted
+        assert!(!limiter.check(ip_a));
+        // ip_b should still have its full bucket
+        assert!(limiter.check(ip_b));
     }
 }
