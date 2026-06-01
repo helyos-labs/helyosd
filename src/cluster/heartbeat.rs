@@ -73,7 +73,9 @@ pub async fn check_nodes(
                     "node dead — triggering reschedule"
                 );
                 node.status = NodeStatus::NotReady;
-                let _ = state.update_node(&node).await;
+                if let Err(e) = state.update_node(&node).await {
+                    warn!(node_id = %node.id, error = %e, "failed to mark dead node as NotReady");
+                }
             }
 
             // Collect pods running on this dead node and reschedule.
@@ -94,7 +96,9 @@ pub async fn check_nodes(
                 "node stale — marking NotReady"
             );
             node.status = NodeStatus::NotReady;
-            let _ = state.update_node(&node).await;
+            if let Err(e) = state.update_node(&node).await {
+                warn!(node_id = %node.id, error = %e, "failed to mark stale node as NotReady");
+            }
         }
     }
 
@@ -208,7 +212,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use nexa_core::ports::state_memory::InMemoryStore;
+    use nexa_core::adapters::state_memory::InMemoryStore;
 
     #[tokio::test]
     async fn monitor_marks_stale_node_not_ready() {

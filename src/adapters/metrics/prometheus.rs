@@ -4,6 +4,7 @@ use nexa_core::ports::metrics::MetricsPort;
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
+use tracing::warn;
 
 pub struct PrometheusMetrics {
     registry: Registry,
@@ -96,35 +97,26 @@ impl PrometheusMetrics {
         )
         .unwrap();
 
-        registry
-            .register(Box::new(http_requests_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(http_request_duration.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(container_events_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(schedule_duration.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(deployment_ops_total.clone()))
-            .unwrap();
-        registry.register(Box::new(nodes_total.clone())).unwrap();
-        registry.register(Box::new(pods_total.clone())).unwrap();
-        registry
-            .register(Box::new(deployments_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(proxy_requests_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(proxy_request_duration.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(proxy_errors_total.clone()))
-            .unwrap();
+        // Register all metrics; log warnings on failure rather than panicking,
+        // since metrics are non-critical.
+        let collectors: Vec<(&str, Box<dyn prometheus::core::Collector>)> = vec![
+            ("http_requests_total", Box::new(http_requests_total.clone())),
+            ("http_request_duration", Box::new(http_request_duration.clone())),
+            ("container_events_total", Box::new(container_events_total.clone())),
+            ("schedule_duration", Box::new(schedule_duration.clone())),
+            ("deployment_ops_total", Box::new(deployment_ops_total.clone())),
+            ("nodes_total", Box::new(nodes_total.clone())),
+            ("pods_total", Box::new(pods_total.clone())),
+            ("deployments_total", Box::new(deployments_total.clone())),
+            ("proxy_requests_total", Box::new(proxy_requests_total.clone())),
+            ("proxy_request_duration", Box::new(proxy_request_duration.clone())),
+            ("proxy_errors_total", Box::new(proxy_errors_total.clone())),
+        ];
+        for (name, collector) in collectors {
+            if let Err(e) = registry.register(collector) {
+                warn!(metric = name, error = %e, "failed to register prometheus metric");
+            }
+        }
 
         Self {
             registry,

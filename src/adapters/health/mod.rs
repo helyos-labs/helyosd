@@ -5,25 +5,34 @@ use nexa_core::domain::orchestrator::OrchestratorHandle;
 use reqwest::Client;
 use tracing::{debug, info};
 
+/// Default health check interval if none is specified.
+const DEFAULT_HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+
 pub struct HealthChecker {
     handle: OrchestratorHandle,
     http_client: Client,
+    interval: Duration,
 }
 
 impl HealthChecker {
     pub fn new(handle: OrchestratorHandle) -> Self {
+        Self::with_interval(handle, DEFAULT_HEALTH_CHECK_INTERVAL)
+    }
+
+    pub fn with_interval(handle: OrchestratorHandle, interval: Duration) -> Self {
         Self {
             handle,
             http_client: Client::builder()
                 .no_proxy()
                 .build()
                 .expect("failed to build reqwest client"),
+            interval,
         }
     }
 
     pub async fn run(self: Arc<Self>) {
-        info!("health checker started");
-        let mut tick = tokio::time::interval(Duration::from_secs(1));
+        info!(interval_ms = self.interval.as_millis() as u64, "health checker started");
+        let mut tick = tokio::time::interval(self.interval);
 
         loop {
             tick.tick().await;
