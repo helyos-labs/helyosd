@@ -153,6 +153,7 @@ impl TestServer {
             store: store.clone(),
             metrics,
             event_tx,
+            api_token_hash: None,
         };
         let app = routes::build(state);
 

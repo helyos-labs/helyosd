@@ -4,12 +4,17 @@ use axum::routing::{delete, get, post};
 use tower_http::trace::TraceLayer;
 
 use super::AppState;
+use super::auth;
 use super::handlers;
 
 pub fn build(state: AppState) -> Router {
-    Router::new()
+    // Public routes — no auth required.
+    let public = Router::new()
         .route("/health", get(handlers::health))
-        .route("/metrics", get(handlers::metrics_endpoint))
+        .route("/metrics", get(handlers::metrics_endpoint));
+
+    // Protected routes — require Bearer token when configured.
+    let protected = Router::new()
         .route("/api/v1/projects", get(handlers::list_projects))
         .route("/api/v1/projects", post(handlers::create_project))
         .route(
@@ -88,6 +93,14 @@ pub fn build(state: AppState) -> Router {
             "/api/v1/cluster/config/proxy",
             post(handlers::set_proxy_config),
         )
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_bearer_token,
+        ));
+
+    // Merge public + protected, then apply shared layers.
+    public
+        .merge(protected)
         .layer(middleware::from_fn_with_state(
             state.clone(),
             handlers::metrics_middleware,

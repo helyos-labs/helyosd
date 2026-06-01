@@ -1,3 +1,4 @@
+pub mod auth;
 mod handlers;
 pub mod routes;
 
@@ -14,6 +15,7 @@ pub struct AppState {
     pub store: Arc<dyn StateStore>,
     pub metrics: Arc<dyn MetricsPort>,
     pub event_tx: broadcast::Sender<ClusterEvent>,
+    pub api_token_hash: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -30,6 +32,7 @@ pub async fn serve(
     store: Arc<dyn StateStore>,
     metrics: Arc<dyn MetricsPort>,
     event_tx: broadcast::Sender<ClusterEvent>,
+    api_token_hash: Option<String>,
     addr: &str,
 ) -> anyhow::Result<()> {
     let state = AppState {
@@ -37,6 +40,7 @@ pub async fn serve(
         store,
         metrics,
         event_tx,
+        api_token_hash,
     };
     let app = routes::build(state);
 

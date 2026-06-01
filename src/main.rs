@@ -96,6 +96,10 @@ struct Cli {
     #[arg(long)]
     overlay: bool,
 
+    /// API bearer token (or set NEXA_API_TOKEN env var)
+    #[arg(long, env = "NEXA_API_TOKEN")]
+    api_token: Option<String>,
+
     /// Container runtime to use: docker, containerd, or auto
     #[arg(long, default_value = "auto")]
     runtime: String,
@@ -275,6 +279,44 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
     }
 }
 
+/// Initialise the API bearer token.
+///
+/// - If `--api-token` is provided on the CLI (or via `NEXA_API_TOKEN` env):
+///   hash it, persist the hash, and return the hash.
+/// - Else if a hash already exists in the store: load and return it.
+/// - Else: generate a fresh token, hash it, persist, log the token once, and
+///   return the hash.
+async fn init_api_token(
+    cli: &Cli,
+    store: &Arc<dyn StateStore>,
+) -> anyhow::Result<Option<String>> {
+    use nexad::api::auth;
+
+    if let Some(ref token) = cli.api_token {
+        let hash = auth::hash_api_token(token);
+        store
+            .set_cluster_config("api_token_hash", &hash)
+            .await?;
+        info!("API token hash stored (token provided via CLI/env)");
+        return Ok(Some(hash));
+    }
+
+    if let Some(hash) = store.get_cluster_config("api_token_hash").await? {
+        info!("loaded existing API token hash from store");
+        return Ok(Some(hash));
+    }
+
+    // No token configured and none stored — generate a new one.
+    let token = auth::generate_api_token();
+    let hash = auth::hash_api_token(&token);
+    store
+        .set_cluster_config("api_token_hash", &hash)
+        .await?;
+    info!("Generated new API token — save this, it will not be shown again:");
+    info!("  NEXA_API_TOKEN={token}");
+    Ok(Some(hash))
+}
+
 // ────────────────────── single-node mode ──────────────────────
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
@@ -317,8 +359,10 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         info!(email, "TLS auto-renewal enabled");
     }
 
+    let api_token_hash = init_api_token(cli, &store).await?;
+
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -429,9 +473,11 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     });
     info!("heartbeat monitor started");
 
+    let api_token_hash = init_api_token(cli, &store).await?;
+
     // Start the HTTP API (blocks).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr).await
 }
 
 // ────────────────────── worker mode ──────────────────────
