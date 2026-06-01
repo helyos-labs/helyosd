@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::Parser;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -317,6 +318,32 @@ async fn init_api_token(
     Ok(Some(hash))
 }
 
+/// Create a cancellation token and spawn a task that cancels it on SIGINT or
+/// SIGTERM.  Returns the token so callers can derive `.cancelled()` futures.
+fn spawn_shutdown_handler() -> CancellationToken {
+    let token = CancellationToken::new();
+    let t = token.clone();
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut sigterm = signal(SignalKind::terminate())
+                .expect("failed to register SIGTERM handler");
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+                _ = sigterm.recv() => {},
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+        info!("shutdown signal received — stopping gracefully");
+        t.cancel();
+    });
+    token
+}
+
 // ────────────────────── single-node mode ──────────────────────
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
@@ -360,9 +387,10 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     }
 
     let api_token_hash = init_api_token(cli, &store).await?;
+    let shutdown = spawn_shutdown_handler();
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr, shutdown.cancelled_owned()).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -474,10 +502,11 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     info!("heartbeat monitor started");
 
     let api_token_hash = init_api_token(cli, &store).await?;
+    let shutdown = spawn_shutdown_handler();
 
-    // Start the HTTP API (blocks).
+    // Start the HTTP API (blocks until shutdown signal).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr, shutdown.cancelled_owned()).await
 }
 
 // ────────────────────── worker mode ──────────────────────

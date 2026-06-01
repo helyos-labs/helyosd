@@ -34,6 +34,7 @@ pub async fn serve(
     event_tx: broadcast::Sender<ClusterEvent>,
     api_token_hash: Option<String>,
     addr: &str,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()> {
     let state = AppState {
         handle,
@@ -47,6 +48,8 @@ pub async fn serve(
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("nexad API listening on {addr}");
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await?;
     Ok(())
 }
