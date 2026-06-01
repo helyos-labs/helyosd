@@ -71,7 +71,7 @@ jobs:
   release:
     name: Release
     needs: build
-    if: always()
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
