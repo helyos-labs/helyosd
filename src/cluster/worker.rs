@@ -103,12 +103,19 @@ pub async fn start_worker(
     let hb_master = master_addr.clone();
     let hb_tls = tls_config.clone();
     let heartbeat_handle = tokio::spawn(async move {
+        let mut backoff = std::time::Duration::from_secs(1);
+        const MAX_BACKOFF: std::time::Duration = std::time::Duration::from_secs(60);
         loop {
-            if let Err(e) =
-                heartbeat::run_heartbeat_sender(hb_master.clone(), node_id, hb_tls.clone()).await
+            match heartbeat::run_heartbeat_sender(hb_master.clone(), node_id, hb_tls.clone()).await
             {
-                error!(error = %e, "heartbeat stream disconnected, reconnecting in 5s");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                Ok(()) => {
+                    backoff = std::time::Duration::from_secs(1);
+                }
+                Err(e) => {
+                    error!(error = %e, backoff_secs = backoff.as_secs(), "heartbeat stream disconnected, reconnecting");
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(MAX_BACKOFF);
+                }
             }
         }
     });

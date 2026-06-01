@@ -240,9 +240,16 @@ fn spawn_orchestrator(
     );
 
     // Spawn health checker background task
-    let health_checker = Arc::new(nexad::adapters::health::HealthChecker::new(handle.clone()));
-    tokio::spawn(async move { health_checker.run().await });
-    info!("health checker started");
+    match nexad::adapters::health::HealthChecker::new(handle.clone()) {
+        Ok(checker) => {
+            let health_checker = Arc::new(checker);
+            tokio::spawn(async move { health_checker.run().await });
+            info!("health checker started");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to build health checker HTTP client, health checks disabled");
+        }
+    }
 
     // Start container event watcher
     nexad::adapters::event_watcher::spawn_event_watcher(

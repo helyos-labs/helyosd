@@ -20,17 +20,22 @@ pub fn spawn_event_watcher(
 ) {
     tokio::spawn(async move {
         info!("container event watcher starting");
+        let mut backoff = std::time::Duration::from_secs(1);
+        const MAX_BACKOFF: std::time::Duration = std::time::Duration::from_secs(60);
         loop {
             match runtime.events().await {
                 Ok(stream) => {
+                    backoff = std::time::Duration::from_secs(1);
                     handle_event_stream(stream, &tx, metrics.as_deref(), event_broadcast.as_ref())
                         .await;
-                    warn!("event stream ended, reconnecting in 5s");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    warn!(backoff_secs = backoff.as_secs(), "event stream ended, reconnecting");
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
                 Err(e) => {
-                    error!(error = %e, "failed to open event stream, retrying in 5s");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    error!(error = %e, backoff_secs = backoff.as_secs(), "failed to open event stream, retrying");
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
             }
         }

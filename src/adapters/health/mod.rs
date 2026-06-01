@@ -15,19 +15,18 @@ pub struct HealthChecker {
 }
 
 impl HealthChecker {
-    pub fn new(handle: OrchestratorHandle) -> Self {
+    pub fn new(handle: OrchestratorHandle) -> Result<Self, reqwest::Error> {
         Self::with_interval(handle, DEFAULT_HEALTH_CHECK_INTERVAL)
     }
 
-    pub fn with_interval(handle: OrchestratorHandle, interval: Duration) -> Self {
-        Self {
+    pub fn with_interval(handle: OrchestratorHandle, interval: Duration) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             handle,
             http_client: Client::builder()
                 .no_proxy()
-                .build()
-                .expect("failed to build reqwest client"),
+                .build()?,
             interval,
-        }
+        })
     }
 
     pub async fn run(self: Arc<Self>) {

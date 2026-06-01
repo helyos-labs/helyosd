@@ -31,6 +31,7 @@ fn load_key(path: &Path) -> Result<[u8; KEY_LEN]> {
 }
 
 fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
+    use rand::rngs::OsRng;
     use rand::RngCore;
 
     if let Some(parent) = path.parent() {
@@ -38,7 +39,7 @@ fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
     }
 
     let mut key = [0u8; KEY_LEN];
-    rand::thread_rng().fill_bytes(&mut key);
+    OsRng.fill_bytes(&mut key);
 
     fs::write(path, key).map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
 
