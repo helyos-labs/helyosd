@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package nexa.cluster;
+package nexa.cluster.v1;
 
 service ClusterService {
     rpc Register(RegisterRequest) returns (RegisterResponse);
