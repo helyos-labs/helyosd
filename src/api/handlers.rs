@@ -607,23 +607,33 @@ pub async fn metrics_endpoint(State(state): AppStateExtractor) -> impl IntoRespo
 }
 
 pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
-    use sysinfo::System;
+    // Collect system stats on a blocking thread so we don't block the async
+    // executor during the ~200ms CPU-measurement window.
+    let (cpu_count, cpu_usage, mem_total, mem_used, hostname) =
+        tokio::task::spawn_blocking(|| {
+            use sysinfo::System;
 
-    let mut sys = System::new();
-    sys.refresh_cpu_all();
-    // Small delay to get meaningful CPU readings
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    sys.refresh_cpu_all();
-    sys.refresh_memory();
+            let mut sys = System::new();
+            sys.refresh_cpu_all();
+            // Small delay to get meaningful CPU readings
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            sys.refresh_cpu_all();
+            sys.refresh_memory();
 
-    let cpu_count = sys.cpus().len() as f64;
-    let cpu_usage: f64 = sys.cpus().iter().map(|c| c.cpu_usage() as f64).sum::<f64>() / cpu_count;
-    let mem_total = sys.total_memory();
-    let mem_used = sys.used_memory();
+            let cpu_count = sys.cpus().len() as f64;
+            let cpu_usage: f64 =
+                sys.cpus().iter().map(|c| c.cpu_usage() as f64).sum::<f64>() / cpu_count;
+            let mem_total = sys.total_memory();
+            let mem_used = sys.used_memory();
 
-    let hostname = hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".into());
+            let hostname = hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "unknown".into());
+
+            (cpu_count, cpu_usage, mem_total, mem_used, hostname)
+        })
+        .await
+        .unwrap_or_else(|_| (0.0, 0.0, 0, 0, "unknown".into()));
 
     // Get pod count from store
     let pod_count = match state.store.list_pods(None).await {

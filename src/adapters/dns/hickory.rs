@@ -39,17 +39,28 @@ impl HickoryDnsProvider {
             NexaError::Runtime(format!("failed to bind DNS TCP on {listen_addr}: {e}"))
         })?;
 
+        // Bind a single socket for all upstream DNS forwarding to avoid
+        // creating (and leaking) a file descriptor per query.
+        let udp_upstream_socket = Arc::new(
+            UdpSocket::bind("0.0.0.0:0")
+                .await
+                .map_err(|e| NexaError::Runtime(format!("failed to bind upstream UDP socket: {e}")))?,
+        );
+
         info!(%listen_addr, %upstream_dns, "starting embedded DNS server");
 
         let udp_store = store.clone();
         let udp_upstream = upstream_dns;
+        let udp_fwd_socket = udp_upstream_socket.clone();
         tokio::spawn(async move {
             let mut buf = vec![0u8; 4096];
             loop {
                 match udp_socket.recv_from(&mut buf).await {
                     Ok((len, src)) => {
                         let data = buf[..len].to_vec();
-                        let response = handle_dns_query(&data, &udp_store, udp_upstream).await;
+                        let response =
+                            handle_dns_query(&data, &udp_store, udp_upstream, &udp_fwd_socket)
+                                .await;
                         if let Some(response_bytes) = response {
                             if let Err(e) = udp_socket.send_to(&response_bytes, src).await {
                                 error!(%e, "failed to send DNS UDP response");
@@ -65,14 +76,17 @@ impl HickoryDnsProvider {
 
         let tcp_store = store.clone();
         let tcp_upstream = upstream_dns;
+        let tcp_fwd_socket = udp_upstream_socket.clone();
         tokio::spawn(async move {
             loop {
                 match tcp_listener.accept().await {
                     Ok((stream, _addr)) => {
                         let store = tcp_store.clone();
+                        let fwd_socket = tcp_fwd_socket.clone();
                         tokio::spawn(async move {
                             if let Err(e) =
-                                handle_tcp_dns_client(stream, &store, tcp_upstream).await
+                                handle_tcp_dns_client(stream, &store, tcp_upstream, &fwd_socket)
+                                    .await
                             {
                                 error!(%e, "DNS TCP handler error");
                             }
@@ -116,6 +130,7 @@ async fn handle_tcp_dns_client(
     mut stream: tokio::net::TcpStream,
     store: &DnsRecordStore,
     upstream: SocketAddr,
+    upstream_socket: &UdpSocket,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -126,7 +141,7 @@ async fn handle_tcp_dns_client(
     let mut msg_buf = vec![0u8; msg_len];
     stream.read_exact(&mut msg_buf).await?;
 
-    if let Some(response) = handle_dns_query(&msg_buf, store, upstream).await {
+    if let Some(response) = handle_dns_query(&msg_buf, store, upstream, upstream_socket).await {
         let resp_len = (response.len() as u16).to_be_bytes();
         stream.write_all(&resp_len).await?;
         stream.write_all(&response).await?;
@@ -139,6 +154,7 @@ async fn handle_dns_query(
     data: &[u8],
     store: &DnsRecordStore,
     upstream: SocketAddr,
+    upstream_socket: &UdpSocket,
 ) -> Option<Vec<u8>> {
     if data.len() < 12 {
         return None;
@@ -168,7 +184,7 @@ async fn handle_dns_query(
         ));
     }
 
-    forward_to_upstream(data, upstream).await
+    forward_to_upstream(data, upstream, upstream_socket).await
 }
 
 fn parse_question(data: &[u8], mut offset: usize) -> Option<(String, u16, usize)> {
@@ -269,12 +285,15 @@ fn build_dns_response(
     response
 }
 
-async fn forward_to_upstream(data: &[u8], upstream: SocketAddr) -> Option<Vec<u8>> {
-    let socket = UdpSocket::bind("0.0.0.0:0").await.ok()?;
-    socket.send_to(data, upstream).await.ok()?;
+async fn forward_to_upstream(
+    data: &[u8],
+    upstream: SocketAddr,
+    upstream_socket: &UdpSocket,
+) -> Option<Vec<u8>> {
+    upstream_socket.send_to(data, upstream).await.ok()?;
 
     let mut buf = vec![0u8; 4096];
-    match tokio::time::timeout(Duration::from_secs(5), socket.recv_from(&mut buf)).await {
+    match tokio::time::timeout(Duration::from_secs(5), upstream_socket.recv_from(&mut buf)).await {
         Ok(Ok((len, _))) => Some(buf[..len].to_vec()),
         _ => {
             error!("upstream DNS timeout");
