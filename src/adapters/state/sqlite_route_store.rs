@@ -94,9 +94,7 @@ impl RouteStore for SqliteRouteStore {
             )
             .map_err(|e| NexaError::Runtime(format!("get_route prepare failed: {e}")))?;
 
-        let result = stmt.query_row(rusqlite::params![domain], |row| {
-            Ok(row_to_route(row))
-        });
+        let result = stmt.query_row(rusqlite::params![domain], |row| Ok(row_to_route(row)));
 
         match result {
             Ok(route) => Ok(Some(route?)),
@@ -120,10 +118,8 @@ impl RouteStore for SqliteRouteStore {
                     .query_map(rusqlite::params![p], |row| Ok(row_to_route(row)))
                     .map_err(|e| NexaError::Runtime(format!("list_routes failed: {e}")))?;
 
-                rows.map(|r| {
-                    r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?
-                })
-                .collect()
+                rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
+                    .collect()
             }
             None => {
                 let mut stmt = conn
@@ -137,10 +133,8 @@ impl RouteStore for SqliteRouteStore {
                     .query_map([], |row| Ok(row_to_route(row)))
                     .map_err(|e| NexaError::Runtime(format!("list_routes failed: {e}")))?;
 
-                rows.map(|r| {
-                    r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?
-                })
-                .collect()
+                rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
+                    .collect()
             }
         }
     }
@@ -148,7 +142,10 @@ impl RouteStore for SqliteRouteStore {
     async fn delete_route(&self, domain: &str) -> Result<bool> {
         let conn = self.conn.lock().await;
         let affected = conn
-            .execute("DELETE FROM routes WHERE domain = ?1", rusqlite::params![domain])
+            .execute(
+                "DELETE FROM routes WHERE domain = ?1",
+                rusqlite::params![domain],
+            )
             .map_err(|e| NexaError::Runtime(format!("delete_route failed: {e}")))?;
         Ok(affected > 0)
     }
@@ -217,9 +214,7 @@ impl RouteStore for SqliteRouteStore {
             .query_map(rusqlite::params![threshold_str], |row| {
                 Ok(row_to_certificate(row))
             })
-            .map_err(|e| {
-                NexaError::Runtime(format!("list_expiring_certificates failed: {e}"))
-            })?;
+            .map_err(|e| NexaError::Runtime(format!("list_expiring_certificates failed: {e}")))?;
 
         rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
             .collect()
@@ -398,9 +393,9 @@ fn row_to_certificate(row: &rusqlite::Row<'_>) -> Result<Certificate> {
     let issued_at = issued_at_str
         .parse()
         .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid issued_at: {e}")))?;
-    let expires_at = expires_at_str.parse().map_err(|e: chrono::ParseError| {
-        NexaError::Runtime(format!("invalid expires_at: {e}"))
-    })?;
+    let expires_at = expires_at_str
+        .parse()
+        .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid expires_at: {e}")))?;
 
     Ok(Certificate {
         domain,

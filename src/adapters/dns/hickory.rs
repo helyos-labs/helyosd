@@ -107,11 +107,10 @@ impl HickoryDnsProvider {
 
         // Bind a single socket for all upstream DNS forwarding to avoid
         // creating (and leaking) a file descriptor per query.
-        let udp_upstream_socket = Arc::new(
-            UdpSocket::bind("0.0.0.0:0")
-                .await
-                .map_err(|e| NexaError::Runtime(format!("failed to bind upstream UDP socket: {e}")))?,
-        );
+        let udp_upstream_socket =
+            Arc::new(UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
+                NexaError::Runtime(format!("failed to bind upstream UDP socket: {e}"))
+            })?);
 
         info!(%listen_addr, %upstream_dns, "starting embedded DNS server");
 
@@ -141,10 +140,10 @@ impl HickoryDnsProvider {
                         let response =
                             handle_dns_query(&data, &udp_store, udp_upstream, &udp_fwd_socket)
                                 .await;
-                        if let Some(response_bytes) = response {
-                            if let Err(e) = udp_socket.send_to(&response_bytes, src).await {
-                                error!(%e, "failed to send DNS UDP response");
-                            }
+                        if let Some(response_bytes) = response
+                            && let Err(e) = udp_socket.send_to(&response_bytes, src).await
+                        {
+                            error!(%e, "failed to send DNS UDP response");
                         }
                     }
                     Err(e) => {

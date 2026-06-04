@@ -80,16 +80,11 @@ pub fn ca_cert_path(data_dir: &Path) -> PathBuf {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn generate_and_persist(
-    ca_path: &Path,
-    cert_path: &Path,
-    key_path: &Path,
-) -> Result<GrpcTlsCerts> {
+fn generate_and_persist(ca_path: &Path, cert_path: &Path, key_path: &Path) -> Result<GrpcTlsCerts> {
     use rcgen::{CertificateParams, DnType, IsCa, KeyPair};
 
     // --- Generate CA ---
-    let mut ca_params = CertificateParams::new(Vec::<String>::new())
-        .context("CA params")?;
+    let mut ca_params = CertificateParams::new(Vec::<String>::new()).context("CA params")?;
     ca_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
     ca_params
         .distinguished_name
@@ -105,15 +100,17 @@ fn generate_and_persist(
     let ca_pem = ca_cert.pem().into_bytes();
 
     // --- Generate server certificate signed by the CA ---
-    let mut server_params = CertificateParams::new(vec!["nexanet".to_string()])
-        .context("server params")?;
+    let mut server_params =
+        CertificateParams::new(vec!["nexanet".to_string()]).context("server params")?;
     server_params
         .distinguished_name
         .push(DnType::CommonName, "nexanet");
     // Also accept connections via localhost / 127.0.0.1 for local development.
     server_params
         .subject_alt_names
-        .push(rcgen::SanType::DnsName("localhost".try_into().context("SAN localhost")?));
+        .push(rcgen::SanType::DnsName(
+            "localhost".try_into().context("SAN localhost")?,
+        ));
     server_params
         .subject_alt_names
         .push(rcgen::SanType::IpAddress(std::net::IpAddr::V4(

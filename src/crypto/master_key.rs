@@ -31,8 +31,8 @@ fn load_key(path: &Path) -> Result<[u8; KEY_LEN]> {
 }
 
 fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
-    use rand::rngs::OsRng;
     use rand::RngCore;
+    use rand::rngs::OsRng;
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| NexaError::Secret(format!("mkdir failed: {e}")))?;
