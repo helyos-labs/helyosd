@@ -28,7 +28,10 @@ pub fn spawn_event_watcher(
                     backoff = std::time::Duration::from_secs(1);
                     handle_event_stream(stream, &tx, metrics.as_deref(), event_broadcast.as_ref())
                         .await;
-                    warn!(backoff_secs = backoff.as_secs(), "event stream ended, reconnecting");
+                    warn!(
+                        backoff_secs = backoff.as_secs(),
+                        "event stream ended, reconnecting"
+                    );
                     tokio::time::sleep(backoff).await;
                     backoff = (backoff * 2).min(MAX_BACKOFF);
                 }

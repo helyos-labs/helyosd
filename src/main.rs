@@ -304,17 +304,12 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
 /// - Else if a hash already exists in the store: load and return it.
 /// - Else: generate a fresh token, hash it, persist, log the token once, and
 ///   return the hash.
-async fn init_api_token(
-    cli: &Cli,
-    store: &Arc<dyn StateStore>,
-) -> anyhow::Result<Option<String>> {
+async fn init_api_token(cli: &Cli, store: &Arc<dyn StateStore>) -> anyhow::Result<Option<String>> {
     use nexad::api::auth;
 
     if let Some(ref token) = cli.api_token {
         let hash = auth::hash_api_token(token);
-        store
-            .set_cluster_config("api_token_hash", &hash)
-            .await?;
+        store.set_cluster_config("api_token_hash", &hash).await?;
         info!("API token hash stored (token provided via CLI/env)");
         return Ok(Some(hash));
     }
@@ -327,9 +322,7 @@ async fn init_api_token(
     // No token configured and none stored — generate a new one.
     let token = auth::generate_api_token();
     let hash = auth::hash_api_token(&token);
-    store
-        .set_cluster_config("api_token_hash", &hash)
-        .await?;
+    store.set_cluster_config("api_token_hash", &hash).await?;
     info!("Generated new API token — save this, it will not be shown again:");
     info!("  NEXA_API_TOKEN={token}");
     Ok(Some(hash))
@@ -344,8 +337,8 @@ fn spawn_shutdown_handler() -> CancellationToken {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{SignalKind, signal};
-            let mut sigterm = signal(SignalKind::terminate())
-                .expect("failed to register SIGTERM handler");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {},
                 _ = sigterm.recv() => {},
@@ -409,7 +402,16 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let shutdown = spawn_shutdown_handler();
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr, shutdown.cancelled_owned()).await
+    nexad::api::serve(
+        handle,
+        Arc::clone(&store),
+        metrics,
+        event_tx.clone(),
+        api_token_hash,
+        &addr,
+        shutdown.cancelled_owned(),
+    )
+    .await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -623,7 +625,16 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks until shutdown signal).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), api_token_hash, &addr, shutdown.cancelled_owned()).await
+    nexad::api::serve(
+        handle,
+        Arc::clone(&store),
+        metrics,
+        event_tx.clone(),
+        api_token_hash,
+        &addr,
+        shutdown.cancelled_owned(),
+    )
+    .await
 }
 
 // ────────────────────── worker mode ──────────────────────
@@ -687,5 +698,13 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
         None
     };
 
-    nexad::cluster::worker::start_worker(master_addr, token, listen_addr, runtime, store, client_tls).await
+    nexad::cluster::worker::start_worker(
+        master_addr,
+        token,
+        listen_addr,
+        runtime,
+        store,
+        client_tls,
+    )
+    .await
 }

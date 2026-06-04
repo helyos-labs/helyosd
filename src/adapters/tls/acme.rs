@@ -16,9 +16,13 @@ pub struct AcmeManager {
 }
 
 impl AcmeManager {
-    pub fn new(email: &str, store: Arc<dyn RouteStore>, staging: bool, master_key: &[u8; 32]) -> Self {
-        let cipher = Aes256Gcm::new_from_slice(master_key)
-            .expect("master key must be 32 bytes");
+    pub fn new(
+        email: &str,
+        store: Arc<dyn RouteStore>,
+        staging: bool,
+        master_key: &[u8; 32],
+    ) -> Self {
+        let cipher = Aes256Gcm::new_from_slice(master_key).expect("master key must be 32 bytes");
         Self {
             email: email.to_string(),
             store,

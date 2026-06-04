@@ -15,9 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-audit
+      # Ignored advisories (no clean fix available; not in our attack surface):
+      #   RUSTSEC-2023-0071 — rsa (Marvin timing): pulled only via sqlx-mysql,
+      #     which sqlx-macros links unconditionally; we use the sqlite driver
+      #     only, so the RSA code path is never executed. No fixed release.
+      #   RUSTSEC-2025-0134 — rustls-pemfile unmaintained, transitive via tonic.
+      #   RUSTSEC-2025-0067/0068 — serde_yml/libyml unsound+unmaintained
+      #     (trusted-config YAML parser; serde_yaml_ng migration is a follow-up).
+      # protobuf (RUSTSEC-2024-0437) and time (RUSTSEC-2026-0009) are FIXED, not
+      # ignored (prometheus default-features=false; time >= 0.3.47).
+      - run: >
+          cargo audit
+          --ignore RUSTSEC-2023-0071
+          --ignore RUSTSEC-2025-0134
+          --ignore RUSTSEC-2025-0067
+          --ignore RUSTSEC-2025-0068
 
   check:
     name: Check

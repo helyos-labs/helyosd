@@ -99,10 +99,10 @@ impl E2eServer {
             if tokio::time::Instant::now() >= deadline {
                 panic!("E2eServer did not become healthy within 5 seconds");
             }
-            if let Ok(resp) = client.get(&health_url).send().await {
-                if resp.status() == 200 {
-                    break;
-                }
+            if let Ok(resp) = client.get(&health_url).send().await
+                && resp.status() == 200
+            {
+                break;
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }

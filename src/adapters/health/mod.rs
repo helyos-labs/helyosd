@@ -19,18 +19,22 @@ impl HealthChecker {
         Self::with_interval(handle, DEFAULT_HEALTH_CHECK_INTERVAL)
     }
 
-    pub fn with_interval(handle: OrchestratorHandle, interval: Duration) -> Result<Self, reqwest::Error> {
+    pub fn with_interval(
+        handle: OrchestratorHandle,
+        interval: Duration,
+    ) -> Result<Self, reqwest::Error> {
         Ok(Self {
             handle,
-            http_client: Client::builder()
-                .no_proxy()
-                .build()?,
+            http_client: Client::builder().no_proxy().build()?,
             interval,
         })
     }
 
     pub async fn run(self: Arc<Self>) {
-        info!(interval_ms = self.interval.as_millis() as u64, "health checker started");
+        info!(
+            interval_ms = self.interval.as_millis() as u64,
+            "health checker started"
+        );
         let mut tick = tokio::time::interval(self.interval);
 
         loop {

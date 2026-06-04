@@ -1,6 +1,6 @@
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use parking_lot::RwLock;
 
 #[derive(Default)]
 pub struct DnsRecordStore {
