@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
-use nexa_core::ports::runtime::ContainerRuntime;
-use nexa_core::ports::state::StateStore;
+use helyos_core::ports::runtime::ContainerRuntime;
+use helyos_core::ports::state::StateStore;
 
 use super::heartbeat;
 use super::proto;

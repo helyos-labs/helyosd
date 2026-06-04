@@ -3,17 +3,17 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::stream;
-use nexa_core::domain::orchestrator::Orchestrator;
-use nexa_core::ports::runtime::{
+use helyos_core::domain::orchestrator::Orchestrator;
+use helyos_core::ports::runtime::{
     ContainerConfig, ContainerInfo, ContainerRuntime, ContainerState, EventStream, LogStream,
     RuntimeEvent,
 };
 use rusqlite::Connection;
 
-use nexad::adapters::secrets::EncryptedSqliteSecretStore;
-use nexad::adapters::state::{InMemoryRouteStore, SqliteStore};
-use nexad::adapters::transport::LocalTransport;
-use nexad::api::{AppState, routes};
+use helyosd::adapters::secrets::EncryptedSqliteSecretStore;
+use helyosd::adapters::state::{InMemoryRouteStore, SqliteStore};
+use helyosd::adapters::transport::LocalTransport;
+use helyosd::api::{AppState, routes};
 
 // ---------------------------------------------------------------------------
 // MockRuntime
@@ -27,27 +27,34 @@ impl ContainerRuntime for MockRuntime {
         "mock"
     }
 
-    async fn pull_image(&self, _image: &str) -> nexa_core::error::Result<()> {
+    async fn pull_image(&self, _image: &str) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
-    async fn create_container(&self, config: &ContainerConfig) -> nexa_core::error::Result<String> {
+    async fn create_container(
+        &self,
+        config: &ContainerConfig,
+    ) -> helyos_core::error::Result<String> {
         Ok(format!("mock-{}", config.name))
     }
 
-    async fn start_container(&self, _id: &str) -> nexa_core::error::Result<()> {
+    async fn start_container(&self, _id: &str) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
-    async fn stop_container(&self, _id: &str, _timeout_secs: u64) -> nexa_core::error::Result<()> {
+    async fn stop_container(
+        &self,
+        _id: &str,
+        _timeout_secs: u64,
+    ) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
-    async fn remove_container(&self, _id: &str, _force: bool) -> nexa_core::error::Result<()> {
+    async fn remove_container(&self, _id: &str, _force: bool) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
-    async fn inspect_container(&self, id: &str) -> nexa_core::error::Result<ContainerInfo> {
+    async fn inspect_container(&self, id: &str) -> helyos_core::error::Result<ContainerInfo> {
         Ok(ContainerInfo {
             id: id.to_string(),
             name: id.to_string(),
@@ -56,19 +63,19 @@ impl ContainerRuntime for MockRuntime {
         })
     }
 
-    async fn logs(&self, _id: &str, _tail: Option<u64>) -> nexa_core::error::Result<LogStream> {
+    async fn logs(&self, _id: &str, _tail: Option<u64>) -> helyos_core::error::Result<LogStream> {
         Ok(Box::pin(stream::empty()))
     }
 
-    async fn container_exists(&self, _name: &str) -> nexa_core::error::Result<bool> {
+    async fn container_exists(&self, _name: &str) -> helyos_core::error::Result<bool> {
         Ok(false)
     }
 
-    async fn create_network(&self, _name: &str) -> nexa_core::error::Result<String> {
+    async fn create_network(&self, _name: &str) -> helyos_core::error::Result<String> {
         Ok("mock-net".to_string())
     }
 
-    async fn remove_network(&self, _name: &str) -> nexa_core::error::Result<()> {
+    async fn remove_network(&self, _name: &str) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
@@ -76,7 +83,7 @@ impl ContainerRuntime for MockRuntime {
         &self,
         _container_id: &str,
         _network: &str,
-    ) -> nexa_core::error::Result<()> {
+    ) -> helyos_core::error::Result<()> {
         Ok(())
     }
 
@@ -84,11 +91,11 @@ impl ContainerRuntime for MockRuntime {
         &self,
         _container_id: &str,
         _network: &str,
-    ) -> nexa_core::error::Result<String> {
+    ) -> helyos_core::error::Result<String> {
         Ok("172.17.0.2".to_string())
     }
 
-    async fn events(&self) -> nexa_core::error::Result<EventStream> {
+    async fn events(&self) -> helyos_core::error::Result<EventStream> {
         let stream: futures::stream::Pending<RuntimeEvent> = stream::pending();
         Ok(Box::pin(stream))
     }
@@ -106,32 +113,33 @@ struct TestServer {
 impl TestServer {
     async fn new() -> Self {
         let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let db_path = dir.path().join("nexad.db");
+        let db_path = dir.path().join("helyosd.db");
         let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         // State store
         let store = SqliteStore::connect(&db_url)
             .await
             .expect("failed to connect SqliteStore");
-        let store: Arc<dyn nexa_core::ports::state::StateStore> = Arc::new(store);
+        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(store);
 
         // Secret store (in-memory rusqlite for tests)
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
         let secret_store = EncryptedSqliteSecretStore::new(secret_conn, &[0u8; 32])
             .expect("failed to create secret store");
-        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> = Arc::new(secret_store);
+        let secret_store: Arc<dyn helyos_core::ports::secrets::SecretStore> =
+            Arc::new(secret_store);
 
         // Runtime + transport
         let runtime: Arc<dyn ContainerRuntime> = Arc::new(MockRuntime);
         let transport = LocalTransport::new(runtime.clone());
-        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> = Arc::new(transport);
+        let transport: Arc<dyn helyos_core::ports::cluster::ClusterTransport> = Arc::new(transport);
 
         // Route store
-        let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
+        let route_store: Arc<dyn helyos_core::ports::route_store::RouteStore> =
             Arc::new(InMemoryRouteStore::new());
 
-        let metrics: Arc<dyn nexa_core::ports::metrics::MetricsPort> =
-            Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
+        let metrics: Arc<dyn helyos_core::ports::metrics::MetricsPort> =
+            Arc::new(helyosd::adapters::metrics::PrometheusMetrics::new());
 
         // Orchestrator
         let handle = Orchestrator::spawn(
@@ -707,11 +715,11 @@ async fn metrics_endpoint_returns_prometheus_format() {
 
     let body = resp.text().await.unwrap();
     assert!(
-        body.contains("nexa_http_requests_total"),
-        "expected nexa_http_requests_total in metrics output"
+        body.contains("helyos_http_requests_total"),
+        "expected helyos_http_requests_total in metrics output"
     );
     assert!(
-        body.contains("nexa_http_request_duration_seconds"),
+        body.contains("helyos_http_request_duration_seconds"),
         "expected duration histogram in metrics output"
     );
 }

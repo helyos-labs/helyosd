@@ -1,4 +1,4 @@
--- Drop the unused `secrets` table from the state database (nexa.db).
+-- Drop the unused `secrets` table from the state database (helyos.db).
 --
 -- This table was created by the initial schema but never read or written:
 -- application secrets live in a separate, encrypted store (secrets.db, managed

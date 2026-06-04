@@ -4,9 +4,9 @@ use aes_gcm::aead::{Aead, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit};
 use tracing::info;
 
-use nexa_core::domain::models::Certificate;
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::route_store::RouteStore;
+use helyos_core::domain::models::Certificate;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::route_store::RouteStore;
 
 pub struct AcmeManager {
     email: String,
@@ -38,7 +38,7 @@ impl AcmeManager {
             staging = self.staging,
             "initiating ACME certificate issuance"
         );
-        Err(NexaError::Certificate(format!(
+        Err(HelyosError::Certificate(format!(
             "ACME issuance for '{domain}' requires network access and HTTP challenge validation"
         )))
     }
@@ -54,7 +54,7 @@ impl AcmeManager {
         let key_pem_enc = self
             .cipher
             .encrypt(&nonce, key_pem.as_ref())
-            .map_err(|e| NexaError::Certificate(format!("failed to encrypt private key: {e}")))?;
+            .map_err(|e| HelyosError::Certificate(format!("failed to encrypt private key: {e}")))?;
 
         let cert = Certificate {
             domain: domain.to_string(),

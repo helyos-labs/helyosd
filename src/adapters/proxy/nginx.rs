@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use tracing::{info, warn};
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
 
 pub struct NginxBackend {
     conf_dir: PathBuf,
@@ -20,7 +20,7 @@ impl NginxBackend {
     }
 
     fn conf_path(&self, domain: &str) -> PathBuf {
-        self.conf_dir.join(format!("nexa-{domain}.conf"))
+        self.conf_dir.join(format!("helyos-{domain}.conf"))
     }
 
     fn render_config(route: &RouteConfig) -> String {
@@ -146,7 +146,7 @@ impl ProxyBackend for NginxBackend {
             let path = self.conf_path(&route.domain);
             let content = Self::render_config(route);
             tokio::fs::write(&path, &content).await.map_err(|e| {
-                NexaError::Proxy(format!(
+                HelyosError::Proxy(format!(
                     "failed to write nginx config {}: {e}",
                     path.display()
                 ))
@@ -167,7 +167,7 @@ impl ProxyBackend for NginxBackend {
                 warn!(domain, path = %path.display(), "nginx config not found, nothing to remove");
                 Ok(())
             }
-            Err(e) => Err(NexaError::Proxy(format!(
+            Err(e) => Err(HelyosError::Proxy(format!(
                 "failed to remove nginx config {}: {e}",
                 path.display()
             ))),
@@ -178,11 +178,11 @@ impl ProxyBackend for NginxBackend {
         let output = std::process::Command::new(&self.nginx_bin)
             .args(["-s", "reload"])
             .output()
-            .map_err(|e| NexaError::Proxy(format!("failed to run nginx reload: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to run nginx reload: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NexaError::Proxy(format!("nginx reload failed: {stderr}")));
+            return Err(HelyosError::Proxy(format!("nginx reload failed: {stderr}")));
         }
         info!("nginx reloaded");
         Ok(())
@@ -192,7 +192,7 @@ impl ProxyBackend for NginxBackend {
         let output = std::process::Command::new(&self.nginx_bin)
             .args(["-t"])
             .output()
-            .map_err(|e| NexaError::Proxy(format!("failed to run nginx -t: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to run nginx -t: {e}")))?;
 
         Ok(output.status.success())
     }
@@ -201,7 +201,7 @@ impl ProxyBackend for NginxBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nexa_core::ports::proxy::Upstream;
+    use helyos_core::ports::proxy::Upstream;
 
     fn http_route() -> RouteConfig {
         RouteConfig {
@@ -297,7 +297,7 @@ mod tests {
         let path = backend.conf_path("api.example.com");
         assert_eq!(
             path,
-            PathBuf::from("/etc/nginx/conf.d/nexa-api.example.com.conf")
+            PathBuf::from("/etc/nginx/conf.d/helyos-api.example.com.conf")
         );
     }
 
@@ -309,7 +309,7 @@ mod tests {
 
         backend.apply_routes(&routes).await.unwrap();
 
-        let path = dir.path().join("nexa-app.example.com.conf");
+        let path = dir.path().join("helyos-app.example.com.conf");
         assert!(path.exists());
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         assert!(content.contains("upstream app_example_com"));
@@ -322,7 +322,7 @@ mod tests {
 
         // First create the file
         backend.apply_routes(&[http_route()]).await.unwrap();
-        let path = dir.path().join("nexa-app.example.com.conf");
+        let path = dir.path().join("helyos-app.example.com.conf");
         assert!(path.exists());
 
         // Then remove it

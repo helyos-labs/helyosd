@@ -6,14 +6,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use nexa_core::domain::models::*;
-use nexa_core::domain::orchestrator::Orchestrator;
-use nexa_core::ports::cluster::ClusterTransport;
-use nexa_core::ports::dns::DnsProvider;
-use nexa_core::ports::metrics::MetricsPort;
-use nexa_core::ports::runtime::ContainerRuntime;
-use nexa_core::ports::secrets::SecretStore;
-use nexa_core::ports::state::StateStore;
+use helyos_core::domain::models::*;
+use helyos_core::domain::orchestrator::Orchestrator;
+use helyos_core::ports::cluster::ClusterTransport;
+use helyos_core::ports::dns::DnsProvider;
+use helyos_core::ports::metrics::MetricsPort;
+use helyos_core::ports::runtime::ContainerRuntime;
+use helyos_core::ports::secrets::SecretStore;
+use helyos_core::ports::state::StateStore;
 
 /// Capacity of the broadcast channel that fans cluster events out to SSE
 /// subscribers. Slow consumers that fall this far behind are lagged (dropped),
@@ -22,8 +22,8 @@ const CLUSTER_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 fn default_data_dir() -> String {
     dirs::home_dir()
-        .map(|h| h.join(".nexa").join("data"))
-        .unwrap_or_else(|| PathBuf::from("/var/lib/nexa"))
+        .map(|h| h.join(".helyos").join("data"))
+        .unwrap_or_else(|| PathBuf::from("/var/lib/helyos"))
         .to_string_lossy()
         .into_owned()
 }
@@ -35,7 +35,7 @@ fn default_proxy_config_dir() -> String {
 }
 
 #[derive(Parser)]
-#[command(name = "nexad", about = "NexaNet daemon", version)]
+#[command(name = "helyosd", about = "Helyos daemon", version)]
 struct Cli {
     #[arg(long, default_value = "127.0.0.1")]
     host: String,
@@ -102,8 +102,8 @@ struct Cli {
     #[arg(long)]
     overlay: bool,
 
-    /// API bearer token (or set NEXA_API_TOKEN env var)
-    #[arg(long, env = "NEXA_API_TOKEN")]
+    /// API bearer token (or set HELYOS_API_TOKEN env var)
+    #[arg(long, env = "HELYOS_API_TOKEN")]
     api_token: Option<String>,
 
     /// Container runtime to use: docker, containerd, or auto
@@ -136,15 +136,15 @@ async fn main() -> anyhow::Result<()> {
 async fn init_infrastructure(
     cli: &Cli,
 ) -> anyhow::Result<(PathBuf, Arc<dyn StateStore>, Arc<dyn ContainerRuntime>)> {
-    use nexad::adapters::runtime::{RuntimeDetector, RuntimeKind};
+    use helyosd::adapters::runtime::{RuntimeDetector, RuntimeKind};
 
     std::fs::create_dir_all(&cli.data_dir)?;
 
     let data_dir = PathBuf::from(&cli.data_dir);
 
-    let db_path = format!("{}/nexa.db", cli.data_dir);
+    let db_path = format!("{}/helyos.db", cli.data_dir);
     let database_url = format!("sqlite:{}?mode=rwc", db_path);
-    let store = nexad::adapters::state::SqliteStore::connect(&database_url).await?;
+    let store = helyosd::adapters::state::SqliteStore::connect(&database_url).await?;
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "state store initialized");
 
@@ -166,13 +166,13 @@ async fn init_infrastructure(
 /// store.  Returns the store **and** the raw master key so that other
 /// subsystems (e.g. TLS certificate storage) can reuse it.
 fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<(Arc<dyn SecretStore>, [u8; 32])> {
-    let master_key = nexad::crypto::master_key::load_or_generate(data_dir)?;
+    let master_key = helyosd::crypto::master_key::load_or_generate(data_dir)?;
     info!("master key loaded");
 
     let secret_conn = rusqlite::Connection::open(format!("{}/secrets.db", cli.data_dir))
         .map_err(|e| anyhow::anyhow!("failed to open secrets db: {e}"))?;
     let secret_store: Arc<dyn SecretStore> = Arc::new(
-        nexad::adapters::secrets::EncryptedSqliteSecretStore::new(secret_conn, &master_key)?,
+        helyosd::adapters::secrets::EncryptedSqliteSecretStore::new(secret_conn, &master_key)?,
     );
     info!("secret store initialized");
 
@@ -183,15 +183,15 @@ fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<(Arc<dyn SecretSto
 fn init_proxy(
     cli: &Cli,
 ) -> anyhow::Result<(
-    Arc<dyn nexa_core::ports::proxy::ProxyBackend>,
-    Arc<dyn nexa_core::ports::route_store::RouteStore>,
+    Arc<dyn helyos_core::ports::proxy::ProxyBackend>,
+    Arc<dyn helyos_core::ports::route_store::RouteStore>,
 )> {
-    use nexad::adapters::proxy::{CaddyBackend, NginxBackend, TraefikBackend};
-    use nexad::adapters::state::SqliteRouteStore;
+    use helyosd::adapters::proxy::{CaddyBackend, NginxBackend, TraefikBackend};
+    use helyosd::adapters::state::SqliteRouteStore;
 
     std::fs::create_dir_all(&cli.proxy_config_dir)?;
 
-    let proxy: Arc<dyn nexa_core::ports::proxy::ProxyBackend> = match cli.proxy_backend.as_str() {
+    let proxy: Arc<dyn helyos_core::ports::proxy::ProxyBackend> = match cli.proxy_backend.as_str() {
         "nginx" => Arc::new(NginxBackend::new(
             PathBuf::from(&cli.proxy_config_dir),
             "nginx".into(),
@@ -202,7 +202,7 @@ fn init_proxy(
         }
         // traefik is the default backend (handles "traefik" and any unknown value)
         _ => {
-            let config_path = PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
+            let config_path = PathBuf::from(&cli.proxy_config_dir).join("helyos-dynamic.yml");
             Arc::new(TraefikBackend::new(config_path))
         }
     };
@@ -210,7 +210,7 @@ fn init_proxy(
     let route_db_path = format!("{}/routes.db", cli.data_dir);
     let route_conn = rusqlite::Connection::open(&route_db_path)
         .map_err(|e| anyhow::anyhow!("failed to open routes db: {e}"))?;
-    let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
+    let route_store: Arc<dyn helyos_core::ports::route_store::RouteStore> =
         Arc::new(SqliteRouteStore::new(route_conn)?);
 
     info!(backend = %cli.proxy_backend, path = route_db_path, "proxy backend and route store initialized");
@@ -225,13 +225,13 @@ fn spawn_orchestrator(
     secret_store: Arc<dyn SecretStore>,
     dns: Option<Arc<dyn DnsProvider>>,
     master_ip: Option<String>,
-    proxy: Option<Arc<dyn nexa_core::ports::proxy::ProxyBackend>>,
-    route_store: Option<Arc<dyn nexa_core::ports::route_store::RouteStore>>,
+    proxy: Option<Arc<dyn helyos_core::ports::proxy::ProxyBackend>>,
+    route_store: Option<Arc<dyn helyos_core::ports::route_store::RouteStore>>,
     metrics: Option<Arc<dyn MetricsPort>>,
-    event_tx: tokio::sync::broadcast::Sender<nexad::api::ClusterEvent>,
-) -> nexa_core::domain::orchestrator::OrchestratorHandle {
+    event_tx: tokio::sync::broadcast::Sender<helyosd::api::ClusterEvent>,
+) -> helyos_core::domain::orchestrator::OrchestratorHandle {
     let transport: Arc<dyn ClusterTransport> = Arc::new(
-        nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)),
+        helyosd::adapters::transport::LocalTransport::new(Arc::clone(runtime)),
     );
     let handle = Orchestrator::spawn(
         Arc::clone(runtime),
@@ -246,7 +246,7 @@ fn spawn_orchestrator(
     );
 
     // Spawn health checker background task
-    match nexad::adapters::health::HealthChecker::new(handle.clone()) {
+    match helyosd::adapters::health::HealthChecker::new(handle.clone()) {
         Ok(checker) => {
             let health_checker = Arc::new(checker);
             tokio::spawn(async move { health_checker.run().await });
@@ -258,7 +258,7 @@ fn spawn_orchestrator(
     }
 
     // Start container event watcher
-    nexad::adapters::event_watcher::spawn_event_watcher(
+    helyosd::adapters::event_watcher::spawn_event_watcher(
         Arc::clone(runtime),
         handle.command_sender(),
         metrics,
@@ -283,7 +283,7 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
                 .map_err(|e| anyhow::anyhow!("invalid --dns-upstream address: {e}"))?;
 
             let provider =
-                nexad::adapters::dns::HickoryDnsProvider::new(listen_addr, upstream_addr);
+                helyosd::adapters::dns::HickoryDnsProvider::new(listen_addr, upstream_addr);
             provider.start().await?;
             info!(listen = %cli.dns_listen, upstream = %cli.dns_upstream, "embedded DNS server started");
 
@@ -299,13 +299,13 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
 
 /// Initialise the API bearer token.
 ///
-/// - If `--api-token` is provided on the CLI (or via `NEXA_API_TOKEN` env):
+/// - If `--api-token` is provided on the CLI (or via `HELYOS_API_TOKEN` env):
 ///   hash it, persist the hash, and return the hash.
 /// - Else if a hash already exists in the store: load and return it.
 /// - Else: generate a fresh token, hash it, persist, log the token once, and
 ///   return the hash.
 async fn init_api_token(cli: &Cli, store: &Arc<dyn StateStore>) -> anyhow::Result<Option<String>> {
-    use nexad::api::auth;
+    use helyosd::api::auth;
 
     if let Some(ref token) = cli.api_token {
         let hash = auth::hash_api_token(token);
@@ -324,7 +324,7 @@ async fn init_api_token(cli: &Cli, store: &Arc<dyn StateStore>) -> anyhow::Resul
     let hash = auth::hash_api_token(&token);
     store.set_cluster_config("api_token_hash", &hash).await?;
     info!("Generated new API token — save this, it will not be shown again:");
-    info!("  NEXA_API_TOKEN={token}");
+    info!("  HELYOS_API_TOKEN={token}");
     Ok(Some(hash))
 }
 
@@ -358,7 +358,7 @@ fn spawn_shutdown_handler() -> CancellationToken {
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     info!(
-        "starting nexad in single-node mode on {}:{}",
+        "starting helyosd in single-node mode on {}:{}",
         cli.host, cli.port
     );
 
@@ -367,9 +367,10 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
-        Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) =
-        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(CLUSTER_EVENT_CHANNEL_CAPACITY);
+        Arc::new(helyosd::adapters::metrics::PrometheusMetrics::new());
+    let (event_tx, _) = tokio::sync::broadcast::channel::<helyosd::api::ClusterEvent>(
+        CLUSTER_EVENT_CHANNEL_CAPACITY,
+    );
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -383,13 +384,13 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     );
 
     if let Some(ref email) = cli.acme_email {
-        let acme = Arc::new(nexad::adapters::tls::AcmeManager::new(
+        let acme = Arc::new(helyosd::adapters::tls::AcmeManager::new(
             email,
             Arc::clone(&route_store),
             false,
             &master_key,
         ));
-        nexad::adapters::tls::spawn_renewal_task(
+        helyosd::adapters::tls::spawn_renewal_task(
             Arc::clone(&route_store),
             acme,
             std::time::Duration::from_secs(86400),
@@ -402,7 +403,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let shutdown = spawn_shutdown_handler();
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(
+    helyosd::api::serve(
         handle,
         Arc::clone(&store),
         metrics,
@@ -418,7 +419,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
 
 async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     info!(
-        "starting nexad in master mode on {}:{} (gRPC {})",
+        "starting helyosd in master mode on {}:{} (gRPC {})",
         cli.host, cli.port, cli.grpc_port
     );
 
@@ -427,9 +428,10 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
-        Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) =
-        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(CLUSTER_EVENT_CHANNEL_CAPACITY);
+        Arc::new(helyosd::adapters::metrics::PrometheusMetrics::new());
+    let (event_tx, _) = tokio::sync::broadcast::channel::<helyosd::api::ClusterEvent>(
+        CLUSTER_EVENT_CHANNEL_CAPACITY,
+    );
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -443,13 +445,13 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     );
 
     if let Some(ref email) = cli.acme_email {
-        let acme = Arc::new(nexad::adapters::tls::AcmeManager::new(
+        let acme = Arc::new(helyosd::adapters::tls::AcmeManager::new(
             email,
             Arc::clone(&route_store),
             false,
             &master_key,
         ));
-        nexad::adapters::tls::spawn_renewal_task(
+        helyosd::adapters::tls::spawn_renewal_task(
             Arc::clone(&route_store),
             acme,
             std::time::Duration::from_secs(86400),
@@ -463,7 +465,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to get hostname: {e}"))?
         .to_string_lossy()
         .to_string();
-    let resources = nexad::cluster::heartbeat::collect_resources();
+    let resources = helyosd::cluster::heartbeat::collect_resources();
     let master_node = Node::new(
         hostname.clone(),
         format!("{}:{}", cli.host, cli.grpc_port),
@@ -480,12 +482,12 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
             hash
         }
         None => {
-            let token = nexad::cluster::token::generate_token();
-            let hash = nexad::cluster::token::hash_token(&token);
+            let token = helyosd::cluster::token::generate_token();
+            let hash = helyosd::cluster::token::hash_token(&token);
             store.set_cluster_config("join_token_hash", &hash).await?;
             info!("join token generated — workers can join with:");
             info!(
-                "  nexad --mode worker --join {}:{} --token {}",
+                "  helyosd --mode worker --join {}:{} --token {}",
                 cli.host, cli.grpc_port, token
             );
             hash
@@ -493,7 +495,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     };
 
     // Generate or load self-signed TLS certificates for gRPC.
-    let grpc_tls_certs = nexad::cluster::tls::load_or_generate(&data_dir)?;
+    let grpc_tls_certs = helyosd::cluster::tls::load_or_generate(&data_dir)?;
     let server_tls_config = grpc_tls_certs.server_tls_config()?;
 
     // Start gRPC server as background task.
@@ -502,7 +504,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let grpc_state = Arc::clone(&store);
     let grpc_token_hash = token_hash.clone();
     tokio::spawn(async move {
-        if let Err(e) = nexad::cluster::server::start_grpc_server(
+        if let Err(e) = helyosd::cluster::server::start_grpc_server(
             &grpc_addr,
             grpc_runtime,
             grpc_state,
@@ -519,8 +521,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let hb_state = Arc::clone(&store);
     let reschedule_handle = handle.clone();
     let reschedule_store = Arc::clone(&store);
-    let reschedule: nexad::cluster::heartbeat::RescheduleFn = Arc::new(move |node_id, pods| {
-        use nexa_core::domain::models::PodStatus;
+    let reschedule: helyosd::cluster::heartbeat::RescheduleFn = Arc::new(move |node_id, pods| {
+        use helyos_core::domain::models::PodStatus;
 
         tracing::warn!(
             node_id = %node_id,
@@ -616,7 +618,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         });
     });
     tokio::spawn(async move {
-        nexad::cluster::heartbeat::run_monitor(hb_state, reschedule).await;
+        helyosd::cluster::heartbeat::run_monitor(hb_state, reschedule).await;
     });
     info!("heartbeat monitor started");
 
@@ -625,7 +627,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks until shutdown signal).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(
+    helyosd::api::serve(
         handle,
         Arc::clone(&store),
         metrics,
@@ -652,20 +654,20 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
         .to_string();
 
     info!(
-        "starting nexad in worker mode, joining master at {}",
+        "starting helyosd in worker mode, joining master at {}",
         master_addr
     );
 
     std::fs::create_dir_all(&cli.data_dir)?;
 
     // Worker gets its own local state store and runtime (respects --runtime flag).
-    let db_path = format!("{}/nexa.db", cli.data_dir);
+    let db_path = format!("{}/helyos.db", cli.data_dir);
     let database_url = format!("sqlite:{}?mode=rwc", db_path);
-    let store = nexad::adapters::state::SqliteStore::connect(&database_url).await?;
+    let store = helyosd::adapters::state::SqliteStore::connect(&database_url).await?;
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "worker state store initialized");
 
-    use nexad::adapters::runtime::{RuntimeDetector, RuntimeKind};
+    use helyosd::adapters::runtime::{RuntimeDetector, RuntimeKind};
     let kind: RuntimeKind = cli
         .runtime
         .parse()
@@ -683,14 +685,14 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
     // If the CA cert file exists in the data directory, enable TLS; otherwise
     // fall back to plaintext (useful for development/testing).
     let data_dir = PathBuf::from(&cli.data_dir);
-    let ca_cert_path = nexad::cluster::tls::ca_cert_path(&data_dir);
+    let ca_cert_path = helyosd::cluster::tls::ca_cert_path(&data_dir);
     let client_tls = if ca_cert_path.exists() {
         let ca_pem = std::fs::read(&ca_cert_path)
             .map_err(|e| anyhow::anyhow!("failed to read CA cert: {e}"))?;
         let ca = tonic::transport::Certificate::from_pem(ca_pem);
         let config = tonic::transport::ClientTlsConfig::new()
             .ca_certificate(ca)
-            .domain_name("nexanet");
+            .domain_name("helyos");
         info!("worker TLS enabled (CA cert loaded)");
         Some(config)
     } else {
@@ -698,7 +700,7 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
         None
     };
 
-    nexad::cluster::worker::start_worker(
+    helyosd::cluster::worker::start_worker(
         master_addr,
         token,
         listen_addr,

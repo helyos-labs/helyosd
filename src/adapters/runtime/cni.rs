@@ -22,7 +22,7 @@ pub struct CniConfig {
     pub plugins: Vec<CniPlugin>,
 }
 
-/// CNI plugin types supported by NexaNet.
+/// CNI plugin types supported by Helyos.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum CniPlugin {
@@ -60,14 +60,14 @@ impl SubnetAllocator {
 
     /// Allocate a /24 subnet for the given network name.
     /// Returns the same subnet if the name was already allocated.
-    pub fn allocate(&self, name: &str) -> nexa_core::error::Result<String> {
+    pub fn allocate(&self, name: &str) -> helyos_core::error::Result<String> {
         let mut allocs = self.allocations.lock();
         if let Some(&octet) = allocs.get(name) {
             return Ok(format!("172.20.{octet}.0/24"));
         }
         let mut next = self.next_octet.lock();
         if *next == 0 {
-            return Err(nexa_core::error::NexaError::Runtime(
+            return Err(helyos_core::error::HelyosError::Runtime(
                 "subnet pool exhausted: all 255 /24 subnets in 172.20.0.0/16 have been \
                  assigned (the allocator hands out octets monotonically and does not \
                  reclaim released subnets)"

@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 
-use nexa_core::error::Result;
-use nexa_core::ports::dns::DnsProvider;
+use helyos_core::error::Result;
+use helyos_core::ports::dns::DnsProvider;
 
 #[derive(Default)]
 pub struct NoopDnsProvider;

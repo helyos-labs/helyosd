@@ -8,9 +8,9 @@ use tonic::{Request, Response, Status, Streaming};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use nexa_core::domain::models::*;
-use nexa_core::ports::runtime::ContainerRuntime;
-use nexa_core::ports::state::StateStore;
+use helyos_core::domain::models::*;
+use helyos_core::ports::runtime::ContainerRuntime;
+use helyos_core::ports::state::StateStore;
 
 use super::proto;
 use super::proto::cluster_service_server::ClusterService;
@@ -156,7 +156,7 @@ impl ClusterService for ClusterServer {
         let spec: DeploymentSpec = serde_json::from_slice(&req.deployment_spec)
             .map_err(|e| Status::invalid_argument(format!("bad spec: {e}")))?;
         let container_name = pod.container_name();
-        let network_name = format!("nexa-{}", spec.project);
+        let network_name = format!("helyos-{}", spec.project);
 
         info!(name = container_name, "worker: creating pod");
 
@@ -176,7 +176,7 @@ impl ClusterService for ClusterServer {
 
         let _ = self.runtime.create_network(&network_name).await;
 
-        use nexa_core::ports::runtime::*;
+        use helyos_core::ports::runtime::*;
 
         let ports: Vec<PortBinding> = spec
             .ports
@@ -188,10 +188,13 @@ impl ClusterService for ClusterServer {
             .collect();
 
         let mut labels = std::collections::HashMap::new();
-        labels.insert("managed-by".to_string(), "nexanet".to_string());
-        labels.insert("nexa.project".to_string(), spec.project.clone());
-        labels.insert("nexa.deployment".to_string(), spec.deployment.name.clone());
-        labels.insert("nexa.pod-id".to_string(), pod.id.to_string());
+        labels.insert("managed-by".to_string(), "helyos".to_string());
+        labels.insert("helyos.project".to_string(), spec.project.clone());
+        labels.insert(
+            "helyos.deployment".to_string(),
+            spec.deployment.name.clone(),
+        );
+        labels.insert("helyos.pod-id".to_string(), pod.id.to_string());
 
         // VolumeSpec uses source_name() and mount_point() methods
         let volumes: Vec<VolumeBinding> = spec

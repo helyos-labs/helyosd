@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use nexa_core::error::{NexaError, Result};
+use helyos_core::error::{HelyosError, Result};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// Reads log files and streams their contents line by line.
@@ -20,7 +20,7 @@ impl LogTailer {
     ) -> Result<impl futures::Stream<Item = Result<String>> + use<>> {
         let path = path.to_path_buf();
         if !path.exists() {
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "log file not found: {}",
                 path.display()
             )));
@@ -35,7 +35,7 @@ impl LogTailer {
         let byte_offset = {
             let meta = tokio::fs::metadata(&path)
                 .await
-                .map_err(|e| NexaError::Runtime(e.to_string()))?;
+                .map_err(|e| HelyosError::Runtime(e.to_string()))?;
             meta.len()
         };
 
@@ -49,7 +49,7 @@ impl LogTailer {
             let file = match tokio::fs::File::open(&path).await {
                 Ok(f) => f,
                 Err(e) => {
-                    yield Err(NexaError::Runtime(e.to_string()));
+                    yield Err(HelyosError::Runtime(e.to_string()));
                     return;
                 }
             };
@@ -60,7 +60,7 @@ impl LogTailer {
             {
                 use tokio::io::AsyncSeekExt;
                 if let Err(e) = reader.seek(std::io::SeekFrom::Start(byte_offset)).await {
-                    yield Err(NexaError::Runtime(e.to_string()));
+                    yield Err(HelyosError::Runtime(e.to_string()));
                     return;
                 }
             }
@@ -80,7 +80,7 @@ impl LogTailer {
                         }
                     }
                     Err(e) => {
-                        yield Err(NexaError::Runtime(e.to_string()));
+                        yield Err(HelyosError::Runtime(e.to_string()));
                         return;
                     }
                 }
@@ -98,14 +98,14 @@ impl LogTailer {
     async fn read_all_inner(path: &Path) -> Result<Vec<String>> {
         let file = tokio::fs::File::open(path)
             .await
-            .map_err(|e| NexaError::Runtime(format!("{}: {}", path.display(), e)))?;
+            .map_err(|e| HelyosError::Runtime(format!("{}: {}", path.display(), e)))?;
         let reader = BufReader::new(file);
         let mut lines_stream = reader.lines();
         let mut lines = Vec::new();
         while let Some(line) = lines_stream
             .next_line()
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?
         {
             lines.push(line);
         }
@@ -171,7 +171,8 @@ mod tests {
 
     #[tokio::test]
     async fn tail_errors_on_missing_file() {
-        let result = LogTailer::tail(Path::new("/tmp/nonexistent_nexad_test.log"), Some(10)).await;
+        let result =
+            LogTailer::tail(Path::new("/tmp/nonexistent_helyosd_test.log"), Some(10)).await;
         assert!(result.is_err());
     }
 

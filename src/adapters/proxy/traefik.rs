@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
 
 // --- Traefik dynamic configuration YAML structs ---
 
@@ -79,8 +79,8 @@ impl TraefikBackend {
 
         for route in routes {
             let sanitized = route.domain.replace('.', "-");
-            let router_name = format!("nexa-{sanitized}");
-            let service_name = format!("nexa-svc-{sanitized}");
+            let router_name = format!("helyos-{sanitized}");
+            let service_name = format!("helyos-svc-{sanitized}");
 
             let (entry_points, tls) = match &route.tls {
                 TlsConfig::None => (vec!["web".to_string()], None),
@@ -137,12 +137,12 @@ impl ProxyBackend for TraefikBackend {
     async fn apply_routes(&self, routes: &[RouteConfig]) -> Result<()> {
         let config = Self::render_config(routes);
         let yaml = serde_yaml_ng::to_string(&config)
-            .map_err(|e| NexaError::Proxy(format!("failed to serialize traefik config: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
         tokio::fs::write(&self.config_path, &yaml)
             .await
             .map_err(|e| {
-                NexaError::Proxy(format!(
+                HelyosError::Proxy(format!(
                     "failed to write traefik config {}: {e}",
                     self.config_path.display()
                 ))
@@ -158,28 +158,28 @@ impl ProxyBackend for TraefikBackend {
                 return Ok(());
             }
             Err(e) => {
-                return Err(NexaError::Proxy(format!(
+                return Err(HelyosError::Proxy(format!(
                     "failed to read traefik config: {e}"
                 )));
             }
         };
 
         let mut config: TraefikDynamicConfig = serde_yaml_ng::from_str(&content)
-            .map_err(|e| NexaError::Proxy(format!("failed to parse traefik config: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to parse traefik config: {e}")))?;
 
         let sanitized = domain.replace('.', "-");
-        let router_name = format!("nexa-{sanitized}");
-        let service_name = format!("nexa-svc-{sanitized}");
+        let router_name = format!("helyos-{sanitized}");
+        let service_name = format!("helyos-svc-{sanitized}");
 
         config.http.routers.remove(&router_name);
         config.http.services.remove(&service_name);
 
         let yaml = serde_yaml_ng::to_string(&config)
-            .map_err(|e| NexaError::Proxy(format!("failed to serialize traefik config: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
         tokio::fs::write(&self.config_path, &yaml)
             .await
-            .map_err(|e| NexaError::Proxy(format!("failed to rewrite traefik config: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to rewrite traefik config: {e}")))?;
         info!(domain, "removed route from traefik config");
         Ok(())
     }
@@ -206,7 +206,7 @@ impl ProxyBackend for TraefikBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nexa_core::ports::proxy::Upstream;
+    use helyos_core::ports::proxy::Upstream;
 
     fn sample_routes() -> Vec<RouteConfig> {
         vec![
@@ -248,21 +248,21 @@ mod tests {
         assert_eq!(parsed.http.services.len(), 2);
 
         // Check router naming
-        assert!(parsed.http.routers.contains_key("nexa-app-example-com"));
-        assert!(parsed.http.routers.contains_key("nexa-plain-example-com"));
+        assert!(parsed.http.routers.contains_key("helyos-app-example-com"));
+        assert!(parsed.http.routers.contains_key("helyos-plain-example-com"));
 
         // Check service naming
         assert!(
             parsed
                 .http
                 .services
-                .contains_key("nexa-svc-app-example-com")
+                .contains_key("helyos-svc-app-example-com")
         );
         assert!(
             parsed
                 .http
                 .services
-                .contains_key("nexa-svc-plain-example-com")
+                .contains_key("helyos-svc-plain-example-com")
         );
     }
 
@@ -277,7 +277,7 @@ mod tests {
             tls: TlsConfig::None,
         }];
         let config = TraefikBackend::render_config(&routes);
-        let router = &config.http.routers["nexa-plain-example-com"];
+        let router = &config.http.routers["helyos-plain-example-com"];
 
         assert_eq!(router.entry_points, vec!["web"]);
         assert!(router.tls.is_none());
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn render_config_health_check() {
         let config = TraefikBackend::render_config(&sample_routes());
-        let svc = &config.http.services["nexa-svc-app-example-com"];
+        let svc = &config.http.services["helyos-svc-app-example-com"];
 
         assert_eq!(svc.load_balancer.health_check.path, "/health");
         assert_eq!(svc.load_balancer.health_check.interval, "10s");
@@ -324,8 +324,8 @@ mod tests {
         let parsed: TraefikDynamicConfig = serde_yaml_ng::from_str(&content).unwrap();
 
         assert_eq!(parsed.http.routers.len(), 1);
-        assert!(!parsed.http.routers.contains_key("nexa-app-example-com"));
-        assert!(parsed.http.routers.contains_key("nexa-plain-example-com"));
+        assert!(!parsed.http.routers.contains_key("helyos-app-example-com"));
+        assert!(parsed.http.routers.contains_key("helyos-plain-example-com"));
         assert_eq!(parsed.http.services.len(), 1);
     }
 

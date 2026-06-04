@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
-use nexad::adapters::dns::DnsRecordStore;
+use helyosd::adapters::dns::DnsRecordStore;
 
 fn ip(a: u8, b: u8, c: u8, d: u8) -> IpAddr {
     IpAddr::V4(Ipv4Addr::new(a, b, c, d))

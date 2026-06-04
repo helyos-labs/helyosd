@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 
-use nexa_core::domain::models::{Certificate, Route, SubnetAllocation};
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::route_store::RouteStore;
+use helyos_core::domain::models::{Certificate, Route, SubnetAllocation};
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::route_store::RouteStore;
 
 #[derive(Default)]
 pub struct InMemoryRouteStore {
@@ -30,7 +30,7 @@ impl RouteStore for InMemoryRouteStore {
     async fn insert_route(&self, route: &Route) -> Result<()> {
         let mut routes = self.routes.write();
         if routes.contains_key(&route.domain) {
-            return Err(NexaError::RouteAlreadyExists(route.domain.clone()));
+            return Err(HelyosError::RouteAlreadyExists(route.domain.clone()));
         }
         routes.insert(route.domain.clone(), route.clone());
         Ok(())
@@ -92,14 +92,14 @@ impl RouteStore for InMemoryRouteStore {
             .iter()
             .any(|s| s.node_id == alloc.node_id && s.project == alloc.project);
         if exists {
-            return Err(NexaError::Network(format!(
+            return Err(HelyosError::Network(format!(
                 "subnet already allocated for node {} project {}",
                 alloc.node_id, alloc.project
             )));
         }
         let subnet_taken = subnets.iter().any(|s| s.subnet == alloc.subnet);
         if subnet_taken {
-            return Err(NexaError::Network(format!(
+            return Err(HelyosError::Network(format!(
                 "subnet {} already in use",
                 alloc.subnet
             )));
@@ -136,7 +136,7 @@ impl RouteStore for InMemoryRouteStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nexa_core::domain::models::TlsMode;
+    use helyos_core::domain::models::TlsMode;
 
     #[tokio::test]
     async fn insert_and_get_route() {

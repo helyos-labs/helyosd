@@ -3,19 +3,19 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/white_logo.png" width="200">
   <source media="(prefers-color-scheme: light)" srcset="assets/black_logo.png" width="200">
-  <img alt="NexaNet" src="assets/black_logo.png" width="200">
+  <img alt="Helyos" src="assets/black_logo.png" width="200">
 </picture>
 
-# nexad
+# helyosd
 
-**NexaNet daemon -- container orchestration engine**
+**Helyos daemon -- container orchestration engine**
 
-[![CI](https://github.com/nexa-net/nexad/actions/workflows/ci.yml/badge.svg)](https://github.com/nexa-net/nexad/actions/workflows/ci.yml)
+[![CI](https://github.com/helyos-labs/helyosd/actions/workflows/ci.yml/badge.svg)](https://github.com/helyos-labs/helyosd/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
-nexad is the server component of NexaNet. It provides concrete adapter
-implementations for every [nexa-core](https://github.com/nexa-net/nexa-core) port
+helyosd is the server component of Helyos. It provides concrete adapter
+implementations for every [helyos-core](https://github.com/helyos-labs/helyos-core) port
 trait, exposes a REST API on port 6443, and supports single-node, master, and
 worker clustering modes with gRPC transport.
 
@@ -30,7 +30,7 @@ worker clustering modes with gRPC transport.
 - **Encrypted secrets** -- AES-256-GCM encryption at rest with auto-generated master key
 - **REST API** -- axum-based HTTP API on port 6443 with full CRUD for all resources
 - **Multi-node clustering** -- master/worker topology over gRPC with join tokens and heartbeat monitoring
-- **Reverse proxy integration** -- pluggable backends: nexa-proxy (built-in), nginx, caddy, traefik
+- **Reverse proxy integration** -- pluggable backends: helyos-proxy (built-in), nginx, caddy, traefik
 - **Automatic TLS** -- ACME certificate provisioning and daily renewal
 - **Overlay networking** -- WireGuard-based mesh with CNI plugin support and per-project subnet allocation
 - **Embedded DNS** -- Hickory DNS server for service discovery (`<deployment>.<project>.internal`)
@@ -53,13 +53,13 @@ worker clustering modes with gRPC transport.
 cargo build --release
 
 # Start in single-node mode (default)
-./target/release/nexad
+./target/release/helyosd
 
 # Start with custom options
-./target/release/nexad \
+./target/release/helyosd \
     --host 0.0.0.0 \
     --port 6443 \
-    --data-dir /var/lib/nexa \
+    --data-dir /var/lib/helyos \
     --runtime auto
 ```
 
@@ -67,7 +67,7 @@ cargo build --release
 
 ```bash
 # Using the CLI
-nexa deploy examples/app.yaml
+helyos deploy examples/app.yaml
 
 # Or directly via the API
 curl -X POST http://localhost:6443/api/v1/deploy \
@@ -77,7 +77,7 @@ curl -X POST http://localhost:6443/api/v1/deploy \
 
 ## Deployment Specs
 
-nexad accepts YAML deployment specs. Two examples are included:
+helyosd accepts YAML deployment specs. Two examples are included:
 
 **examples/app.yaml** -- a multi-replica API service:
 
@@ -132,12 +132,12 @@ healthcheck:
 ## CLI Flags
 
 ```
-nexad [OPTIONS]
+helyosd [OPTIONS]
 
 Options:
     --host <HOST>               Listen address [default: 0.0.0.0]
     --port <PORT>               HTTP API port [default: 6443]
-    --data-dir <DIR>            Data directory [default: /var/lib/nexa]
+    --data-dir <DIR>            Data directory [default: /var/lib/helyos]
     --mode <MODE>               Node mode: single, master, worker [default: single]
     --runtime <RUNTIME>         Container runtime: docker, containerd, auto [default: auto]
     --join <ADDR>               Master address (worker mode)
@@ -147,8 +147,8 @@ Options:
     --dns-listen <ADDR>         Embedded DNS listen address [default: 0.0.0.0:15353]
     --dns-upstream <ADDR>       Upstream DNS server [default: 8.8.8.8:53]
     --master-ip <IP>            Node IP for container DNS config (embedded mode)
-    --proxy-backend <BACKEND>   Proxy: nexa-proxy, nginx, caddy, traefik [default: nexa-proxy]
-    --proxy-config-dir <DIR>    Proxy config directory [default: /var/lib/nexa/proxy]
+    --proxy-backend <BACKEND>   Proxy: helyos-proxy, nginx, caddy, traefik [default: helyos-proxy]
+    --proxy-config-dir <DIR>    Proxy config directory [default: /var/lib/helyos/proxy]
     --acme-email <EMAIL>        ACME email for automatic TLS
     --cluster-cidr <CIDR>       Overlay network CIDR [default: 172.20.0.0/16]
     --wg-port <PORT>            WireGuard listen port [default: 51820]
@@ -159,12 +159,12 @@ Options:
 
 ```
                     +-------------------+
-                    |    nexa (CLI)     |
+                    |    helyos (CLI)     |
                     +--------+----------+
                              |  HTTP
                              v
 +-----------------------------------------------------------+
-|  nexad                                                    |
+|  helyosd                                                    |
 |                                                           |
 |  +------------------+    +-----------------------------+  |
 |  |   REST API       |    |   gRPC Cluster Server       |  |
@@ -183,7 +183,7 @@ Options:
 |  |Runtime  | |Store| |Store | |     | |Backend |         |
 |  +---------+ +-----+ +------+ +-----+ +-------+          |
 |   Docker/    SQLite   AES-GCM  Hickory  nginx/caddy/     |
-|   containerd          SQLite   DNS      traefik/nexa     |
+|   containerd          SQLite   DNS      traefik/helyos     |
 +-----------------------------------------------------------+
 ```
 
@@ -199,7 +199,7 @@ Options:
 | `ClusterTransport` | `LocalTransport` | single-node passthrough |
 | `DnsProvider` | `HickoryDnsProvider` | embedded DNS server |
 | `DnsProvider` | `NoopDnsProvider` | Docker DNS fallback |
-| `ProxyBackend` | `NexaProxyBackend` | JSON config for nexa-proxy |
+| `ProxyBackend` | `HelyosProxyBackend` | JSON config for helyos-proxy |
 | `ProxyBackend` | `NginxBackend` | generates nginx.conf |
 | `ProxyBackend` | `CaddyBackend` | generates Caddyfile + API reload |
 | `ProxyBackend` | `TraefikBackend` | generates dynamic YAML config |
@@ -237,17 +237,17 @@ All endpoints are under `/api/v1/`. The API listens on port 6443 by default.
 
 ## Clustering
 
-nexad supports a master/worker topology for multi-node deployments.
+helyosd supports a master/worker topology for multi-node deployments.
 
 ```bash
 # Start the master
-nexad --mode master --dns-mode embedded --master-ip 10.0.1.1 --overlay
+helyosd --mode master --dns-mode embedded --master-ip 10.0.1.1 --overlay
 
 # The master prints a join command:
-#   nexad --mode worker --join 10.0.1.1:6444 --token <TOKEN>
+#   helyosd --mode worker --join 10.0.1.1:6444 --token <TOKEN>
 
 # On worker nodes
-nexad --mode worker \
+helyosd --mode worker \
     --join 10.0.1.1:6444 \
     --token <TOKEN> \
     --overlay
@@ -278,9 +278,9 @@ cargo test --test sqlite_integration
 
 | Repository | Description |
 |---|---|
-| [nexa-core](https://github.com/nexa-net/nexa-core) | Core domain types, traits, and orchestrator |
-| [nexa-cli](https://github.com/nexa-net/nexa-cli) | CLI tool for deploying and managing containers |
-| [nexa-proxy](https://github.com/nexa-net/nexa-proxy) | Lightweight reverse proxy with weighted load balancing |
+| [helyos-core](https://github.com/helyos-labs/helyos-core) | Core domain types, traits, and orchestrator |
+| [helyos-cli](https://github.com/helyos-labs/helyos-cli) | CLI tool for deploying and managing containers |
+| [helyos-proxy](https://github.com/helyos-labs/helyos-proxy) | Lightweight reverse proxy with weighted load balancing |
 
 ## License
 

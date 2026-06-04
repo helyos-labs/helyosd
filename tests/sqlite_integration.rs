@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use nexa_core::domain::models::*;
-use nexa_core::ports::state::StateStore;
+use helyos_core::domain::models::*;
+use helyos_core::ports::state::StateStore;
 
 #[tokio::test]
 async fn full_lifecycle_with_sqlite() {
@@ -9,7 +9,7 @@ async fn full_lifecycle_with_sqlite() {
     let db_path = dir.path().join("test.db");
     let url = format!("sqlite:{}?mode=rwc", db_path.display());
 
-    let store = nexad::adapters::state::SqliteStore::connect(&url)
+    let store = helyosd::adapters::state::SqliteStore::connect(&url)
         .await
         .expect("failed to connect to SQLite");
 
@@ -65,7 +65,7 @@ async fn full_lifecycle_with_sqlite() {
     assert_eq!(remaining_pods.len(), 0, "cascade delete should remove pods");
 
     drop(store);
-    let store2 = nexad::adapters::state::SqliteStore::connect(&url)
+    let store2 = helyosd::adapters::state::SqliteStore::connect(&url)
         .await
         .expect("reconnect failed");
 
@@ -80,7 +80,7 @@ async fn cascade_delete_project_removes_deployments_and_pods() {
     let db_path = dir.path().join("cascade_test.db");
     let url = format!("sqlite:{}?mode=rwc", db_path.display());
 
-    let store = nexad::adapters::state::SqliteStore::connect(&url)
+    let store = helyosd::adapters::state::SqliteStore::connect(&url)
         .await
         .expect("failed to connect to SQLite");
 
@@ -140,7 +140,7 @@ async fn node_crud_lifecycle() {
     let db_path = dir.path().join("node_test.db");
     let url = format!("sqlite:{}?mode=rwc", db_path.display());
 
-    let store = nexad::adapters::state::SqliteStore::connect(&url)
+    let store = helyosd::adapters::state::SqliteStore::connect(&url)
         .await
         .expect("failed to connect to SQLite");
 
@@ -201,7 +201,7 @@ async fn concurrent_pod_inserts() {
     let url = format!("sqlite:{}?mode=rwc", db_path.display());
 
     let store = Arc::new(
-        nexad::adapters::state::SqliteStore::connect(&url)
+        helyosd::adapters::state::SqliteStore::connect(&url)
             .await
             .expect("failed to connect to SQLite"),
     );

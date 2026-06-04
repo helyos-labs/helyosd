@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
 use uuid::Uuid;
 
-use nexa_core::domain::models::{
+use helyos_core::domain::models::{
     Deployment, DeploymentSpec, DeploymentStatus, Node, NodeResources, NodeRole, NodeStatus, Pod,
     PodStatus, Project, ProjectStatus,
 };
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::state::StateStore;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::state::StateStore;
 
 pub struct SqliteStore {
     pool: SqlitePool,
@@ -33,25 +33,25 @@ impl SqliteStore {
         let id_str: String = row.get("id");
         let id = id_str
             .parse::<Uuid>()
-            .map_err(|e| NexaError::Runtime(format!("invalid deployment id: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid deployment id: {e}")))?;
 
         let spec_json: String = row.get("spec_json");
         let spec: DeploymentSpec =
-            serde_json::from_str(&spec_json).map_err(NexaError::Serialization)?;
+            serde_json::from_str(&spec_json).map_err(HelyosError::Serialization)?;
 
         let status_str: String = row.get("status");
         let status = status_str
             .parse::<DeploymentStatus>()
-            .map_err(|e| NexaError::Runtime(format!("invalid deployment status: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid deployment status: {e}")))?;
 
         let created_at_str: String = row.get("created_at");
         let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
-            NexaError::Runtime(format!("invalid created_at: {e}"))
+            HelyosError::Runtime(format!("invalid created_at: {e}"))
         })?;
 
         let updated_at_str: String = row.get("updated_at");
         let updated_at = updated_at_str.parse().map_err(|e: chrono::ParseError| {
-            NexaError::Runtime(format!("invalid updated_at: {e}"))
+            HelyosError::Runtime(format!("invalid updated_at: {e}"))
         })?;
 
         Ok(Deployment {
@@ -67,17 +67,17 @@ impl SqliteStore {
         let id_str: String = row.get("id");
         let id = id_str
             .parse::<Uuid>()
-            .map_err(|e| NexaError::Runtime(format!("invalid node id: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid node id: {e}")))?;
 
         let role_str: String = row.get("role");
         let role = role_str
             .parse::<NodeRole>()
-            .map_err(|e| NexaError::Runtime(format!("invalid node role: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid node role: {e}")))?;
 
         let status_str: String = row.get("status");
         let status = status_str
             .parse::<NodeStatus>()
-            .map_err(|e| NexaError::Runtime(format!("invalid node status: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid node status: {e}")))?;
 
         let cpu_cores: f64 = row.get("cpu_cores");
         let memory_bytes: i64 = row.get("memory_bytes");
@@ -89,12 +89,12 @@ impl SqliteStore {
         let last_heartbeat = last_heartbeat_str
             .parse()
             .map_err(|e: chrono::ParseError| {
-                NexaError::Runtime(format!("invalid last_heartbeat: {e}"))
+                HelyosError::Runtime(format!("invalid last_heartbeat: {e}"))
             })?;
 
         let joined_at_str: String = row.get("joined_at");
         let joined_at = joined_at_str.parse().map_err(|e: chrono::ParseError| {
-            NexaError::Runtime(format!("invalid joined_at: {e}"))
+            HelyosError::Runtime(format!("invalid joined_at: {e}"))
         })?;
 
         Ok(Node {
@@ -119,21 +119,21 @@ impl SqliteStore {
         let id_str: String = row.get("id");
         let id = id_str
             .parse::<Uuid>()
-            .map_err(|e| NexaError::Runtime(format!("invalid pod id: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid pod id: {e}")))?;
 
         let deployment_id_str: String = row.get("deployment_id");
         let deployment_id = deployment_id_str
             .parse::<Uuid>()
-            .map_err(|e| NexaError::Runtime(format!("invalid deployment_id: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid deployment_id: {e}")))?;
 
         let status_str: String = row.get("status");
         let status = status_str
             .parse::<PodStatus>()
-            .map_err(|e| NexaError::Runtime(format!("invalid pod status: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid pod status: {e}")))?;
 
         let created_at_str: String = row.get("created_at");
         let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
-            NexaError::Runtime(format!("invalid created_at: {e}"))
+            HelyosError::Runtime(format!("invalid created_at: {e}"))
         })?;
 
         let replica_index: i64 = row.get("replica_index");
@@ -143,7 +143,7 @@ impl SqliteStore {
         let node_id = node_id_str
             .map(|s| s.parse::<Uuid>())
             .transpose()
-            .map_err(|e| NexaError::Runtime(format!("invalid node_id: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("invalid node_id: {e}")))?;
 
         Ok(Pod {
             id,
@@ -176,9 +176,9 @@ impl StateStore for SqliteStore {
         match result {
             Ok(_) => Ok(()),
             Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Err(
-                NexaError::InvalidSpec(format!("project '{}' already exists", project.name)),
+                HelyosError::InvalidSpec(format!("project '{}' already exists", project.name)),
             ),
-            Err(e) => Err(NexaError::Runtime(e.to_string())),
+            Err(e) => Err(HelyosError::Runtime(e.to_string())),
         }
     }
 
@@ -187,7 +187,7 @@ impl StateStore for SqliteStore {
             .bind(name)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         match row {
             None => Ok(None),
@@ -195,10 +195,10 @@ impl StateStore for SqliteStore {
                 let status_str: String = r.get("status");
                 let status = status_str
                     .parse::<ProjectStatus>()
-                    .map_err(|e| NexaError::Runtime(format!("invalid project status: {e}")))?;
+                    .map_err(|e| HelyosError::Runtime(format!("invalid project status: {e}")))?;
                 let created_at_str: String = r.get("created_at");
                 let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
-                    NexaError::Runtime(format!("invalid created_at: {e}"))
+                    HelyosError::Runtime(format!("invalid created_at: {e}"))
                 })?;
                 Ok(Some(Project {
                     name: r.get("name"),
@@ -213,17 +213,17 @@ impl StateStore for SqliteStore {
         let rows = sqlx::query("SELECT name, status, created_at FROM projects ORDER BY name")
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         rows.iter()
             .map(|r| {
                 let status_str: String = r.get("status");
                 let status = status_str
                     .parse::<ProjectStatus>()
-                    .map_err(|e| NexaError::Runtime(format!("invalid project status: {e}")))?;
+                    .map_err(|e| HelyosError::Runtime(format!("invalid project status: {e}")))?;
                 let created_at_str: String = r.get("created_at");
                 let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
-                    NexaError::Runtime(format!("invalid created_at: {e}"))
+                    HelyosError::Runtime(format!("invalid created_at: {e}"))
                 })?;
                 Ok(Project {
                     name: r.get("name"),
@@ -240,11 +240,11 @@ impl StateStore for SqliteStore {
             .bind(name)
             .execute(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?
             .rows_affected();
 
         if rows_affected == 0 {
-            Err(NexaError::ProjectNotFound(name.to_string()))
+            Err(HelyosError::ProjectNotFound(name.to_string()))
         } else {
             Ok(())
         }
@@ -255,13 +255,13 @@ impl StateStore for SqliteStore {
             .bind(name)
             .execute(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(())
     }
 
     async fn insert_deployment(&self, deployment: &Deployment) -> Result<()> {
         let spec_json =
-            serde_json::to_string(&deployment.spec).map_err(NexaError::Serialization)?;
+            serde_json::to_string(&deployment.spec).map_err(HelyosError::Serialization)?;
 
         sqlx::query(
             "INSERT INTO deployments (id, project, name, spec_json, status, created_at, updated_at) \
@@ -276,7 +276,7 @@ impl StateStore for SqliteStore {
         .bind(deployment.updated_at.to_rfc3339())
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         Ok(())
     }
@@ -290,7 +290,7 @@ impl StateStore for SqliteStore {
         .bind(name)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         match row {
             None => Ok(None),
@@ -307,14 +307,14 @@ impl StateStore for SqliteStore {
             .bind(p)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?,
             None => sqlx::query(
                 "SELECT id, spec_json, status, created_at, updated_at \
                      FROM deployments ORDER BY created_at",
             )
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?,
         };
 
         rows.iter().map(Self::row_to_deployment).collect()
@@ -322,7 +322,7 @@ impl StateStore for SqliteStore {
 
     async fn update_deployment(&self, deployment: &Deployment) -> Result<()> {
         let spec_json =
-            serde_json::to_string(&deployment.spec).map_err(NexaError::Serialization)?;
+            serde_json::to_string(&deployment.spec).map_err(HelyosError::Serialization)?;
 
         let rows_affected = sqlx::query(
             "UPDATE deployments SET spec_json = ?, status = ?, updated_at = ? WHERE id = ?",
@@ -333,11 +333,11 @@ impl StateStore for SqliteStore {
         .bind(deployment.id.to_string())
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?
         .rows_affected();
 
         if rows_affected == 0 {
-            Err(NexaError::DeploymentNotFound(deployment.id.to_string()))
+            Err(HelyosError::DeploymentNotFound(deployment.id.to_string()))
         } else {
             Ok(())
         }
@@ -348,7 +348,7 @@ impl StateStore for SqliteStore {
             .bind(id.to_string())
             .execute(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(())
     }
 
@@ -372,7 +372,7 @@ impl StateStore for SqliteStore {
         .bind(pod.created_at.to_rfc3339())
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         Ok(())
     }
@@ -387,7 +387,7 @@ impl StateStore for SqliteStore {
             .bind(p)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?,
             None => sqlx::query(
                 "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
                      container_id, container_ip, status, image, restart_count, created_at \
@@ -395,7 +395,7 @@ impl StateStore for SqliteStore {
             )
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?,
         };
 
         rows.iter().map(Self::row_to_pod).collect()
@@ -413,11 +413,11 @@ impl StateStore for SqliteStore {
         .bind(pod.id.to_string())
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?
         .rows_affected();
 
         if rows_affected == 0 {
-            Err(NexaError::PodNotFound(pod.id.to_string()))
+            Err(HelyosError::PodNotFound(pod.id.to_string()))
         } else {
             Ok(())
         }
@@ -428,7 +428,7 @@ impl StateStore for SqliteStore {
             .bind(id.to_string())
             .execute(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(())
     }
 
@@ -441,7 +441,7 @@ impl StateStore for SqliteStore {
         .bind(deployment_id.to_string())
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         rows.iter().map(Self::row_to_pod).collect()
     }
@@ -470,9 +470,9 @@ impl StateStore for SqliteStore {
         match result {
             Ok(_) => Ok(()),
             Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Err(
-                NexaError::InvalidSpec(format!("node '{}' already exists", node.name)),
+                HelyosError::InvalidSpec(format!("node '{}' already exists", node.name)),
             ),
-            Err(e) => Err(NexaError::Runtime(e.to_string())),
+            Err(e) => Err(HelyosError::Runtime(e.to_string())),
         }
     }
 
@@ -485,7 +485,7 @@ impl StateStore for SqliteStore {
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         match row {
             None => Ok(None),
@@ -502,7 +502,7 @@ impl StateStore for SqliteStore {
         .bind(name)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         match row {
             None => Ok(None),
@@ -518,7 +518,7 @@ impl StateStore for SqliteStore {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         rows.iter().map(Self::row_to_node).collect()
     }
@@ -542,11 +542,11 @@ impl StateStore for SqliteStore {
         .bind(node.id.to_string())
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?
         .rows_affected();
 
         if rows_affected == 0 {
-            Err(NexaError::NodeNotFound(node.id.to_string()))
+            Err(HelyosError::NodeNotFound(node.id.to_string()))
         } else {
             Ok(())
         }
@@ -557,7 +557,7 @@ impl StateStore for SqliteStore {
             .bind(id.to_string())
             .execute(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(())
     }
 
@@ -566,7 +566,7 @@ impl StateStore for SqliteStore {
             .bind(key)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         Ok(row.map(|r| r.get("value")))
     }
@@ -580,7 +580,7 @@ impl StateStore for SqliteStore {
         .bind(value)
         .execute(&self.pool)
         .await
-        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(())
     }
 }
@@ -589,11 +589,11 @@ impl StateStore for SqliteStore {
 mod tests {
     use std::collections::HashMap;
 
-    use nexa_core::domain::models::{
+    use helyos_core::domain::models::{
         Deployment, DeploymentMeta, DeploymentSpec, DeploymentStatus, Node, NodeResources,
         NodeRole, NodeStatus, Pod, PodStatus, Project, ProjectStatus, RestartPolicy,
     };
-    use nexa_core::ports::state::StateStore;
+    use helyos_core::ports::state::StateStore;
 
     use super::SqliteStore;
 

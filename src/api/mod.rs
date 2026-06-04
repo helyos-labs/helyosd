@@ -4,9 +4,9 @@ pub mod routes;
 
 use std::sync::Arc;
 
-use nexa_core::domain::orchestrator::OrchestratorHandle;
-use nexa_core::ports::metrics::MetricsPort;
-use nexa_core::ports::state::StateStore;
+use helyos_core::domain::orchestrator::OrchestratorHandle;
+use helyos_core::ports::metrics::MetricsPort;
+use helyos_core::ports::state::StateStore;
 use tokio::sync::broadcast;
 
 #[derive(Clone)]
@@ -46,7 +46,7 @@ pub async fn serve(
     let app = routes::build(state);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("nexad API listening on {addr}");
+    tracing::info!("helyosd API listening on {addr}");
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)

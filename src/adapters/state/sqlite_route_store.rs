@@ -5,9 +5,9 @@ use chrono::{Duration, Utc};
 use rusqlite::Connection;
 use tokio::sync::Mutex;
 
-use nexa_core::domain::models::{Certificate, Route, SubnetAllocation, TlsMode};
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::route_store::RouteStore;
+use helyos_core::domain::models::{Certificate, Route, SubnetAllocation, TlsMode};
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::route_store::RouteStore;
 
 /// SQLite-backed route store that persists routes, certificates, and subnet
 /// allocations across daemon restarts.
@@ -48,7 +48,7 @@ impl SqliteRouteStore {
                 PRIMARY KEY (node_id, project)
             );",
         )
-        .map_err(|e| NexaError::Runtime(format!("failed to init route store tables: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("failed to init route store tables: {e}")))?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -79,9 +79,9 @@ impl RouteStore for SqliteRouteStore {
             Err(rusqlite::Error::SqliteFailure(e, _))
                 if e.code == rusqlite::ErrorCode::ConstraintViolation =>
             {
-                Err(NexaError::RouteAlreadyExists(route.domain.clone()))
+                Err(HelyosError::RouteAlreadyExists(route.domain.clone()))
             }
-            Err(e) => Err(NexaError::Runtime(format!("insert_route failed: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("insert_route failed: {e}"))),
         }
     }
 
@@ -92,14 +92,14 @@ impl RouteStore for SqliteRouteStore {
                 "SELECT domain, project, deployment, tls_mode, created_at
                  FROM routes WHERE domain = ?1",
             )
-            .map_err(|e| NexaError::Runtime(format!("get_route prepare failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("get_route prepare failed: {e}")))?;
 
         let result = stmt.query_row(rusqlite::params![domain], |row| Ok(row_to_route(row)));
 
         match result {
             Ok(route) => Ok(Some(route?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(NexaError::Runtime(format!("get_route failed: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("get_route failed: {e}"))),
         }
     }
 
@@ -112,14 +112,18 @@ impl RouteStore for SqliteRouteStore {
                         "SELECT domain, project, deployment, tls_mode, created_at
                          FROM routes WHERE project = ?1 ORDER BY domain",
                     )
-                    .map_err(|e| NexaError::Runtime(format!("list_routes prepare failed: {e}")))?;
+                    .map_err(|e| {
+                        HelyosError::Runtime(format!("list_routes prepare failed: {e}"))
+                    })?;
 
                 let rows = stmt
                     .query_map(rusqlite::params![p], |row| Ok(row_to_route(row)))
-                    .map_err(|e| NexaError::Runtime(format!("list_routes failed: {e}")))?;
+                    .map_err(|e| HelyosError::Runtime(format!("list_routes failed: {e}")))?;
 
-                rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
-                    .collect()
+                rows.map(|r| {
+                    r.map_err(|e| HelyosError::Runtime(format!("row read failed: {e}")))?
+                })
+                .collect()
             }
             None => {
                 let mut stmt = conn
@@ -127,14 +131,18 @@ impl RouteStore for SqliteRouteStore {
                         "SELECT domain, project, deployment, tls_mode, created_at
                          FROM routes ORDER BY domain",
                     )
-                    .map_err(|e| NexaError::Runtime(format!("list_routes prepare failed: {e}")))?;
+                    .map_err(|e| {
+                        HelyosError::Runtime(format!("list_routes prepare failed: {e}"))
+                    })?;
 
                 let rows = stmt
                     .query_map([], |row| Ok(row_to_route(row)))
-                    .map_err(|e| NexaError::Runtime(format!("list_routes failed: {e}")))?;
+                    .map_err(|e| HelyosError::Runtime(format!("list_routes failed: {e}")))?;
 
-                rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
-                    .collect()
+                rows.map(|r| {
+                    r.map_err(|e| HelyosError::Runtime(format!("row read failed: {e}")))?
+                })
+                .collect()
             }
         }
     }
@@ -146,7 +154,7 @@ impl RouteStore for SqliteRouteStore {
                 "DELETE FROM routes WHERE domain = ?1",
                 rusqlite::params![domain],
             )
-            .map_err(|e| NexaError::Runtime(format!("delete_route failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("delete_route failed: {e}")))?;
         Ok(affected > 0)
     }
 
@@ -174,7 +182,7 @@ impl RouteStore for SqliteRouteStore {
                 cert.acme_account,
             ],
         )
-        .map_err(|e| NexaError::Runtime(format!("upsert_certificate failed: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("upsert_certificate failed: {e}")))?;
         Ok(())
     }
 
@@ -185,14 +193,14 @@ impl RouteStore for SqliteRouteStore {
                 "SELECT domain, cert_pem, key_pem_enc, key_nonce, issued_at, expires_at, acme_account
                  FROM certificates WHERE domain = ?1",
             )
-            .map_err(|e| NexaError::Runtime(format!("get_certificate prepare failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("get_certificate prepare failed: {e}")))?;
 
         let result = stmt.query_row(rusqlite::params![domain], |row| Ok(row_to_certificate(row)));
 
         match result {
             Ok(cert) => Ok(Some(cert?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(NexaError::Runtime(format!("get_certificate failed: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("get_certificate failed: {e}"))),
         }
     }
 
@@ -207,16 +215,16 @@ impl RouteStore for SqliteRouteStore {
                  FROM certificates WHERE expires_at <= ?1",
             )
             .map_err(|e| {
-                NexaError::Runtime(format!("list_expiring_certificates prepare failed: {e}"))
+                HelyosError::Runtime(format!("list_expiring_certificates prepare failed: {e}"))
             })?;
 
         let rows = stmt
             .query_map(rusqlite::params![threshold_str], |row| {
                 Ok(row_to_certificate(row))
             })
-            .map_err(|e| NexaError::Runtime(format!("list_expiring_certificates failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("list_expiring_certificates failed: {e}")))?;
 
-        rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}")))?)
+        rows.map(|r| r.map_err(|e| HelyosError::Runtime(format!("row read failed: {e}")))?)
             .collect()
     }
 
@@ -227,7 +235,7 @@ impl RouteStore for SqliteRouteStore {
                 "DELETE FROM certificates WHERE domain = ?1",
                 rusqlite::params![domain],
             )
-            .map_err(|e| NexaError::Runtime(format!("delete_certificate failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("delete_certificate failed: {e}")))?;
         Ok(affected > 0)
     }
 
@@ -243,11 +251,11 @@ impl RouteStore for SqliteRouteStore {
                 rusqlite::params![alloc.subnet],
                 |row| row.get::<_, i64>(0),
             )
-            .map_err(|e| NexaError::Runtime(format!("allocate_subnet check failed: {e}")))?
+            .map_err(|e| HelyosError::Runtime(format!("allocate_subnet check failed: {e}")))?
             > 0;
 
         if subnet_taken {
-            return Err(NexaError::Network(format!(
+            return Err(HelyosError::Network(format!(
                 "subnet {} already in use",
                 alloc.subnet
             )));
@@ -263,12 +271,12 @@ impl RouteStore for SqliteRouteStore {
             Err(rusqlite::Error::SqliteFailure(e, _))
                 if e.code == rusqlite::ErrorCode::ConstraintViolation =>
             {
-                Err(NexaError::Network(format!(
+                Err(HelyosError::Network(format!(
                     "subnet already allocated for node {} project {}",
                     alloc.node_id, alloc.project
                 )))
             }
-            Err(e) => Err(NexaError::Runtime(format!("allocate_subnet failed: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("allocate_subnet failed: {e}"))),
         }
     }
 
@@ -283,7 +291,7 @@ impl RouteStore for SqliteRouteStore {
                 "SELECT node_id, project, subnet
                  FROM subnet_allocations WHERE node_id = ?1 AND project = ?2",
             )
-            .map_err(|e| NexaError::Runtime(format!("get_node_subnet prepare failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("get_node_subnet prepare failed: {e}")))?;
 
         let result = stmt.query_row(rusqlite::params![node_id, project], |row| {
             Ok(SubnetAllocation {
@@ -296,7 +304,7 @@ impl RouteStore for SqliteRouteStore {
         match result {
             Ok(alloc) => Ok(Some(alloc)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(NexaError::Runtime(format!("get_node_subnet failed: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("get_node_subnet failed: {e}"))),
         }
     }
 
@@ -304,7 +312,7 @@ impl RouteStore for SqliteRouteStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn
             .prepare("SELECT node_id, project, subnet FROM subnet_allocations ORDER BY node_id")
-            .map_err(|e| NexaError::Runtime(format!("list_subnets prepare failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("list_subnets prepare failed: {e}")))?;
 
         let rows = stmt
             .query_map([], |row| {
@@ -314,9 +322,9 @@ impl RouteStore for SqliteRouteStore {
                     subnet: row.get(2)?,
                 })
             })
-            .map_err(|e| NexaError::Runtime(format!("list_subnets failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("list_subnets failed: {e}")))?;
 
-        rows.map(|r| r.map_err(|e| NexaError::Runtime(format!("row read failed: {e}"))))
+        rows.map(|r| r.map_err(|e| HelyosError::Runtime(format!("row read failed: {e}"))))
             .collect()
     }
 
@@ -327,7 +335,7 @@ impl RouteStore for SqliteRouteStore {
                 "DELETE FROM subnet_allocations WHERE node_id = ?1 AND project = ?2",
                 rusqlite::params![node_id, project],
             )
-            .map_err(|e| NexaError::Runtime(format!("deallocate_subnet failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("deallocate_subnet failed: {e}")))?;
         Ok(affected > 0)
     }
 }
@@ -337,26 +345,26 @@ impl RouteStore for SqliteRouteStore {
 fn row_to_route(row: &rusqlite::Row<'_>) -> Result<Route> {
     let domain: String = row
         .get(0)
-        .map_err(|e| NexaError::Runtime(format!("invalid domain: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid domain: {e}")))?;
     let project: String = row
         .get(1)
-        .map_err(|e| NexaError::Runtime(format!("invalid project: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid project: {e}")))?;
     let deployment: String = row
         .get(2)
-        .map_err(|e| NexaError::Runtime(format!("invalid deployment: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid deployment: {e}")))?;
     let tls_mode_str: String = row
         .get(3)
-        .map_err(|e| NexaError::Runtime(format!("invalid tls_mode: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid tls_mode: {e}")))?;
     let created_at_str: String = row
         .get(4)
-        .map_err(|e| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid created_at: {e}")))?;
 
     let tls_mode: TlsMode = tls_mode_str
         .parse()
-        .map_err(|e: String| NexaError::Runtime(format!("invalid tls_mode value: {e}")))?;
-    let created_at = created_at_str
-        .parse()
-        .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+        .map_err(|e: String| HelyosError::Runtime(format!("invalid tls_mode value: {e}")))?;
+    let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
+        HelyosError::Runtime(format!("invalid created_at: {e}"))
+    })?;
 
     Ok(Route {
         domain,
@@ -370,32 +378,32 @@ fn row_to_route(row: &rusqlite::Row<'_>) -> Result<Route> {
 fn row_to_certificate(row: &rusqlite::Row<'_>) -> Result<Certificate> {
     let domain: String = row
         .get(0)
-        .map_err(|e| NexaError::Runtime(format!("invalid domain: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid domain: {e}")))?;
     let cert_pem: Vec<u8> = row
         .get(1)
-        .map_err(|e| NexaError::Runtime(format!("invalid cert_pem: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid cert_pem: {e}")))?;
     let key_pem_enc: Vec<u8> = row
         .get(2)
-        .map_err(|e| NexaError::Runtime(format!("invalid key_pem_enc: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid key_pem_enc: {e}")))?;
     let key_nonce: Vec<u8> = row
         .get(3)
-        .map_err(|e| NexaError::Runtime(format!("invalid key_nonce: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid key_nonce: {e}")))?;
     let issued_at_str: String = row
         .get(4)
-        .map_err(|e| NexaError::Runtime(format!("invalid issued_at: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid issued_at: {e}")))?;
     let expires_at_str: String = row
         .get(5)
-        .map_err(|e| NexaError::Runtime(format!("invalid expires_at: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid expires_at: {e}")))?;
     let acme_account: Option<String> = row
         .get(6)
-        .map_err(|e| NexaError::Runtime(format!("invalid acme_account: {e}")))?;
+        .map_err(|e| HelyosError::Runtime(format!("invalid acme_account: {e}")))?;
 
     let issued_at = issued_at_str
         .parse()
-        .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid issued_at: {e}")))?;
-    let expires_at = expires_at_str
-        .parse()
-        .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid expires_at: {e}")))?;
+        .map_err(|e: chrono::ParseError| HelyosError::Runtime(format!("invalid issued_at: {e}")))?;
+    let expires_at = expires_at_str.parse().map_err(|e: chrono::ParseError| {
+        HelyosError::Runtime(format!("invalid expires_at: {e}"))
+    })?;
 
     Ok(Certificate {
         domain,

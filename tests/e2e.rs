@@ -1,16 +1,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use nexa_core::domain::orchestrator::Orchestrator;
-use nexa_core::ports::runtime::ContainerRuntime;
+use helyos_core::domain::orchestrator::Orchestrator;
+use helyos_core::ports::runtime::ContainerRuntime;
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use nexad::adapters::runtime::DockerRuntime;
-use nexad::adapters::secrets::EncryptedSqliteSecretStore;
-use nexad::adapters::state::{InMemoryRouteStore, SqliteStore};
-use nexad::adapters::transport::LocalTransport;
-use nexad::api::{AppState, routes};
+use helyosd::adapters::runtime::DockerRuntime;
+use helyosd::adapters::secrets::EncryptedSqliteSecretStore;
+use helyosd::adapters::state::{InMemoryRouteStore, SqliteStore};
+use helyosd::adapters::transport::LocalTransport;
+use helyosd::api::{AppState, routes};
 
 // ---------------------------------------------------------------------------
 // E2eServer
@@ -24,20 +24,21 @@ struct E2eServer {
 impl E2eServer {
     async fn new() -> Self {
         let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let db_path = dir.path().join("nexad.db");
+        let db_path = dir.path().join("helyosd.db");
         let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         // State store
         let store = SqliteStore::connect(&db_url)
             .await
             .expect("failed to connect SqliteStore");
-        let store: Arc<dyn nexa_core::ports::state::StateStore> = Arc::new(store);
+        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(store);
 
         // Secret store
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
         let secret_store = EncryptedSqliteSecretStore::new(secret_conn, &[0u8; 32])
             .expect("failed to create secret store");
-        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> = Arc::new(secret_store);
+        let secret_store: Arc<dyn helyos_core::ports::secrets::SecretStore> =
+            Arc::new(secret_store);
 
         // Real Docker runtime
         let docker_runtime =
@@ -46,14 +47,14 @@ impl E2eServer {
 
         // Transport
         let transport = LocalTransport::new(runtime.clone());
-        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> = Arc::new(transport);
+        let transport: Arc<dyn helyos_core::ports::cluster::ClusterTransport> = Arc::new(transport);
 
         // Route store
-        let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
+        let route_store: Arc<dyn helyos_core::ports::route_store::RouteStore> =
             Arc::new(InMemoryRouteStore::new());
 
-        let metrics: Arc<dyn nexa_core::ports::metrics::MetricsPort> =
-            Arc::new(nexa_core::ports::metrics::NoOpMetrics);
+        let metrics: Arc<dyn helyos_core::ports::metrics::MetricsPort> =
+            Arc::new(helyos_core::ports::metrics::NoOpMetrics);
 
         // Orchestrator
         let handle = Orchestrator::spawn(
@@ -145,7 +146,7 @@ async fn cleanup_containers() {
             "ps",
             "-a",
             "--filter",
-            "name=nexa-e2e-",
+            "name=helyos-e2e-",
             "--format",
             "{{.Names}}",
         ])

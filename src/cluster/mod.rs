@@ -1,5 +1,5 @@
 pub mod proto {
-    tonic::include_proto!("nexa.cluster.v1");
+    tonic::include_proto!("helyos.cluster.v1");
 }
 
 pub mod heartbeat;

@@ -7,8 +7,8 @@ use tonic::Request;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use nexa_core::domain::models::*;
-use nexa_core::ports::state::StateStore;
+use helyos_core::domain::models::*;
+use helyos_core::ports::state::StateStore;
 
 use super::proto;
 use super::proto::cluster_service_client::ClusterServiceClient;
@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use nexa_core::adapters::state_memory::InMemoryStore;
+    use helyos_core::adapters::state_memory::InMemoryStore;
 
     #[tokio::test]
     async fn monitor_marks_stale_node_not_ready() {

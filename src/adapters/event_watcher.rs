@@ -6,9 +6,9 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use nexa_core::domain::orchestrator::Command;
-use nexa_core::ports::metrics::MetricsPort;
-use nexa_core::ports::runtime::{ContainerRuntime, RuntimeEvent};
+use helyos_core::domain::orchestrator::Command;
+use helyos_core::ports::metrics::MetricsPort;
+use helyos_core::ports::runtime::{ContainerRuntime, RuntimeEvent};
 
 use crate::api::ClusterEvent;
 
@@ -46,7 +46,7 @@ pub fn spawn_event_watcher(
 }
 
 async fn handle_event_stream(
-    mut stream: nexa_core::ports::runtime::EventStream,
+    mut stream: helyos_core::ports::runtime::EventStream,
     tx: &mpsc::Sender<Command>,
     metrics: Option<&dyn MetricsPort>,
     event_broadcast: Option<&broadcast::Sender<ClusterEvent>>,
@@ -153,7 +153,7 @@ mod tests {
             exit_code: 1,
         }];
         let (tx, mut rx) = mpsc::channel(16);
-        let stream: nexa_core::ports::runtime::EventStream =
+        let stream: helyos_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         handle_event_stream(stream, &tx, None, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
@@ -176,7 +176,7 @@ mod tests {
             container_id: pod_id.to_string(),
         }];
         let (tx, mut rx) = mpsc::channel(16);
-        let stream: nexa_core::ports::runtime::EventStream =
+        let stream: helyos_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         handle_event_stream(stream, &tx, None, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
@@ -198,7 +198,7 @@ mod tests {
             container_id: Uuid::new_v4().to_string(),
         }];
         let (tx, mut rx) = mpsc::channel(16);
-        let stream: nexa_core::ports::runtime::EventStream =
+        let stream: helyos_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         handle_event_stream(stream, &tx, None, None).await;
         assert!(rx.try_recv().is_err(), "should not forward started events");
@@ -212,7 +212,7 @@ mod tests {
         }];
         let (tx, _rx) = mpsc::channel(16);
         let (bc_tx, mut bc_rx) = broadcast::channel(16);
-        let stream: nexa_core::ports::runtime::EventStream =
+        let stream: helyos_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         handle_event_stream(stream, &tx, None, Some(&bc_tx)).await;
         let event = bc_rx.try_recv().expect("should have broadcast event");
@@ -222,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn event_watcher_records_metrics_on_die() {
-        use nexa_core::ports::metrics::NoOpMetrics;
+        use helyos_core::ports::metrics::NoOpMetrics;
 
         let pod_id = Uuid::new_v4();
         let events = vec![RuntimeEvent::ContainerDied {
@@ -230,7 +230,7 @@ mod tests {
             exit_code: 1,
         }];
         let (tx, _rx) = mpsc::channel(16);
-        let stream: nexa_core::ports::runtime::EventStream =
+        let stream: helyos_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         let metrics = NoOpMetrics;
         handle_event_stream(stream, &tx, Some(&metrics), None).await;

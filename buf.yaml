@@ -6,7 +6,7 @@ lint:
     - BASIC
   except:
     # The proto lives at proto/cluster.proto (a flat layout) rather than
-    # proto/nexa/cluster/v1/cluster.proto, so the package-to-directory rule
+    # proto/helyos/cluster/v1/cluster.proto, so the package-to-directory rule
     # does not apply here.
     - PACKAGE_DIRECTORY_MATCH
 breaking:
