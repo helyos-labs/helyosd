@@ -16,14 +16,14 @@ name = "nexad"
 path = "src/main.rs"
 
 [dependencies]
-nexa-core = { git = "https://github.com/nexa-net/nexa-core", tag = "v0.1.5" }
+nexa-core = { git = "https://github.com/nexa-net/nexa-core", tag = "v0.1.6" }
 # default-features=false drops the `protobuf` exposition format (and its
 # vulnerable protobuf 2.x dep, RUSTSEC-2024-0437); we only use TextEncoder.
 prometheus = { version = "0.13", default-features = false }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
+serde_yaml_ng = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 anyhow = "1"
