@@ -1,22 +1,22 @@
 [package]
-name = "nexad"
-description = "NexaNet daemon — container orchestration engine"
+name = "helyosd"
+description = "Helyos daemon — container orchestration engine"
 version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/nexa-net/nexad"
+repository = "https://github.com/helyos-labs/helyosd"
 rust-version = "1.88"
 
 [lib]
-name = "nexad"
+name = "helyosd"
 path = "src/lib.rs"
 
 [[bin]]
-name = "nexad"
+name = "helyosd"
 path = "src/main.rs"
 
 [dependencies]
-nexa-core = { git = "https://github.com/nexa-net/nexa-core", tag = "v0.1.6" }
+helyos-core = { git = "https://github.com/helyos-labs/helyos-core", tag = "v0.1.7" }
 # default-features=false drops the `protobuf` exposition format (and its
 # vulnerable protobuf 2.x dep, RUSTSEC-2024-0437); we only use TextEncoder.
 prometheus = { version = "0.13", default-features = false }

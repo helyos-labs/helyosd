@@ -1,20 +1,20 @@
 //! Integration tests for ContainerRuntime implementations.
 //!
 //! Requires a real container runtime. Tests are #[ignore] by default.
-//! Run with: NEXA_TEST_RUNTIME=docker cargo test --test runtime_integration -- --ignored
+//! Run with: HELYOS_TEST_RUNTIME=docker cargo test --test runtime_integration -- --ignored
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use nexa_core::ports::runtime::*;
+use helyos_core::ports::runtime::*;
 
 const TEST_IMAGE: &str = "busybox:latest";
 
 async fn get_runtime() -> Option<Arc<dyn ContainerRuntime>> {
-    let runtime_name = std::env::var("NEXA_TEST_RUNTIME").unwrap_or("docker".into());
+    let runtime_name = std::env::var("HELYOS_TEST_RUNTIME").unwrap_or("docker".into());
     match runtime_name.as_str() {
         "docker" => {
-            use nexad::adapters::runtime::DockerRuntime;
+            use helyosd::adapters::runtime::DockerRuntime;
             match DockerRuntime::new() {
                 Ok(rt) => {
                     if rt.ping().await.is_ok() {
@@ -31,8 +31,8 @@ async fn get_runtime() -> Option<Arc<dyn ContainerRuntime>> {
             }
         }
         "containerd" => {
-            use nexad::adapters::runtime::ContainerdRuntime;
-            match ContainerdRuntime::new("/tmp/nexa-test") {
+            use helyosd::adapters::runtime::ContainerdRuntime;
+            match ContainerdRuntime::new("/tmp/helyos-test") {
                 Ok(rt) => {
                     if rt.ping().await.is_ok() {
                         Some(Arc::new(rt))
@@ -47,13 +47,13 @@ async fn get_runtime() -> Option<Arc<dyn ContainerRuntime>> {
                 }
             }
         }
-        other => panic!("Unknown NEXA_TEST_RUNTIME: {other}"),
+        other => panic!("Unknown HELYOS_TEST_RUNTIME: {other}"),
     }
 }
 
 fn unique_name(prefix: &str) -> String {
     let id = uuid::Uuid::new_v4().to_string()[..8].to_string();
-    format!("nexa-test-{prefix}-{id}")
+    format!("helyos-test-{prefix}-{id}")
 }
 
 #[tokio::test]

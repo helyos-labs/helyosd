@@ -38,12 +38,12 @@ impl GrpcTlsCerts {
     /// Build a [`ClientTlsConfig`] that trusts this CA.
     ///
     /// The `domain_name` should match the SAN in the server certificate.  For
-    /// self-signed certs we default to `"nexanet"`.
+    /// self-signed certs we default to `"helyos"`.
     pub fn client_tls_config(&self) -> Result<ClientTlsConfig> {
         let ca = Certificate::from_pem(&self.ca_pem);
         let config = ClientTlsConfig::new()
             .ca_certificate(ca)
-            .domain_name("nexanet");
+            .domain_name("helyos");
         Ok(config)
     }
 }
@@ -88,7 +88,7 @@ fn generate_and_persist(ca_path: &Path, cert_path: &Path, key_path: &Path) -> Re
     ca_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
     ca_params
         .distinguished_name
-        .push(DnType::CommonName, "NexaNet gRPC CA");
+        .push(DnType::CommonName, "Helyos gRPC CA");
     // Valid for ~10 years.
     ca_params.not_after = rcgen::date_time_ymd(2036, 1, 1);
 
@@ -101,10 +101,10 @@ fn generate_and_persist(ca_path: &Path, cert_path: &Path, key_path: &Path) -> Re
 
     // --- Generate server certificate signed by the CA ---
     let mut server_params =
-        CertificateParams::new(vec!["nexanet".to_string()]).context("server params")?;
+        CertificateParams::new(vec!["helyos".to_string()]).context("server params")?;
     server_params
         .distinguished_name
-        .push(DnType::CommonName, "nexanet");
+        .push(DnType::CommonName, "helyos");
     // Also accept connections via localhost / 127.0.0.1 for local development.
     server_params
         .subject_alt_names

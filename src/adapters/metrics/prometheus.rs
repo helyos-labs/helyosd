@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use nexa_core::ports::metrics::MetricsPort;
+use helyos_core::ports::metrics::MetricsPort;
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
@@ -32,14 +32,14 @@ impl PrometheusMetrics {
         let registry = Registry::new();
 
         let http_requests_total = IntCounterVec::new(
-            Opts::new("nexa_http_requests_total", "Total HTTP requests"),
+            Opts::new("helyos_http_requests_total", "Total HTTP requests"),
             &["method", "path", "status"],
         )
         .unwrap();
 
         let http_request_duration = HistogramVec::new(
             HistogramOpts::new(
-                "nexa_http_request_duration_seconds",
+                "helyos_http_request_duration_seconds",
                 "HTTP request duration in seconds",
             ),
             &["method", "path"],
@@ -48,7 +48,7 @@ impl PrometheusMetrics {
 
         let container_events_total = IntCounterVec::new(
             Opts::new(
-                "nexa_container_events_total",
+                "helyos_container_events_total",
                 "Total container lifecycle events",
             ),
             &["event"],
@@ -57,7 +57,7 @@ impl PrometheusMetrics {
 
         let schedule_duration = HistogramVec::new(
             HistogramOpts::new(
-                "nexa_schedule_duration_seconds",
+                "helyos_schedule_duration_seconds",
                 "Scheduler decision duration in seconds",
             ),
             &["strategy"],
@@ -65,26 +65,26 @@ impl PrometheusMetrics {
         .unwrap();
 
         let deployment_ops_total = IntCounterVec::new(
-            Opts::new("nexa_deployment_ops_total", "Total deployment operations"),
+            Opts::new("helyos_deployment_ops_total", "Total deployment operations"),
             &["op"],
         )
         .unwrap();
 
         let nodes_total =
-            IntGauge::new("nexa_nodes_total", "Current number of cluster nodes").unwrap();
-        let pods_total = IntGauge::new("nexa_pods_total", "Current number of pods").unwrap();
+            IntGauge::new("helyos_nodes_total", "Current number of cluster nodes").unwrap();
+        let pods_total = IntGauge::new("helyos_pods_total", "Current number of pods").unwrap();
         let deployments_total =
-            IntGauge::new("nexa_deployments_total", "Current number of deployments").unwrap();
+            IntGauge::new("helyos_deployments_total", "Current number of deployments").unwrap();
 
         let proxy_requests_total = IntCounterVec::new(
-            Opts::new("nexa_proxy_requests_total", "Total proxy requests"),
+            Opts::new("helyos_proxy_requests_total", "Total proxy requests"),
             &["domain", "status"],
         )
         .unwrap();
 
         let proxy_request_duration = HistogramVec::new(
             HistogramOpts::new(
-                "nexa_proxy_request_duration_seconds",
+                "helyos_proxy_request_duration_seconds",
                 "Proxy upstream request duration in seconds",
             ),
             &["domain"],
@@ -92,7 +92,7 @@ impl PrometheusMetrics {
         .unwrap();
 
         let proxy_errors_total = IntCounterVec::new(
-            Opts::new("nexa_proxy_errors_total", "Total proxy errors"),
+            Opts::new("helyos_proxy_errors_total", "Total proxy errors"),
             &["domain", "error_type"],
         )
         .unwrap();
@@ -226,9 +226,9 @@ mod tests {
         let output = m.encode();
         // Label-less IntGauges are emitted immediately (initialized to 0).
         // IntCounterVec / HistogramVec only appear after the first observation.
-        assert!(output.contains("nexa_nodes_total 0"));
-        assert!(output.contains("nexa_pods_total 0"));
-        assert!(output.contains("nexa_deployments_total 0"));
+        assert!(output.contains("helyos_nodes_total 0"));
+        assert!(output.contains("helyos_pods_total 0"));
+        assert!(output.contains("helyos_deployments_total 0"));
     }
 
     #[test]
@@ -236,8 +236,8 @@ mod tests {
         let m = PrometheusMetrics::new();
         m.record_http_request("GET", "/health", 200, 0.001);
         let output = m.encode();
-        assert!(output.contains("nexa_http_requests_total"));
-        assert!(output.contains("nexa_http_request_duration_seconds"));
+        assert!(output.contains("helyos_http_requests_total"));
+        assert!(output.contains("helyos_http_request_duration_seconds"));
     }
 
     #[test]
@@ -245,7 +245,7 @@ mod tests {
         let m = PrometheusMetrics::new();
         m.record_container_event("died");
         let output = m.encode();
-        assert!(output.contains("nexa_container_events_total"));
+        assert!(output.contains("helyos_container_events_total"));
         assert!(output.contains("died"));
     }
 
@@ -256,9 +256,9 @@ mod tests {
         m.set_pod_count(10);
         m.set_deployment_count(5);
         let output = m.encode();
-        assert!(output.contains("nexa_nodes_total 3"));
-        assert!(output.contains("nexa_pods_total 10"));
-        assert!(output.contains("nexa_deployments_total 5"));
+        assert!(output.contains("helyos_nodes_total 3"));
+        assert!(output.contains("helyos_pods_total 10"));
+        assert!(output.contains("helyos_deployments_total 5"));
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
         m.record_deployment_op("deploy");
         m.record_deployment_op("scale");
         let output = m.encode();
-        assert!(output.contains("nexa_deployment_ops_total"));
+        assert!(output.contains("helyos_deployment_ops_total"));
         assert!(output.contains("deploy"));
         assert!(output.contains("scale"));
     }
@@ -278,8 +278,8 @@ mod tests {
         m.record_proxy_request("api.example.com", 200, 0.05);
         m.record_proxy_error("api.example.com", "connection_refused");
         let output = m.encode();
-        assert!(output.contains("nexa_proxy_requests_total"));
-        assert!(output.contains("nexa_proxy_errors_total"));
+        assert!(output.contains("helyos_proxy_requests_total"));
+        assert!(output.contains("helyos_proxy_errors_total"));
         assert!(output.contains("api.example.com"));
     }
 

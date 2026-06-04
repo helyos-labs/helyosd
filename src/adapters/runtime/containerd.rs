@@ -8,15 +8,15 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::runtime::*;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::runtime::*;
 
 use super::cni::CniManager;
 use super::log_tailer::LogTailer;
 
 /// Container runtime adapter that delegates to the containerd `ctr` CLI.
 ///
-/// All operations run against the `nexa` containerd namespace. Container logs
+/// All operations run against the `helyos` containerd namespace. Container logs
 /// are stored under `{data_dir}/logs/{container_id}/` and streamed by
 /// [`LogTailer`].
 pub struct ContainerdRuntime {
@@ -124,7 +124,7 @@ impl ContainerdRuntime {
     /// `data_dir` is used for log storage and CNI configuration.
     pub fn new(data_dir: &str) -> Result<Self> {
         Ok(Self {
-            namespace: "nexa".to_string(),
+            namespace: "helyos".to_string(),
             data_dir: PathBuf::from(data_dir),
             cni: Mutex::new(CniManager::new(data_dir)),
             netns_map: Mutex::new(HashMap::new()),
@@ -138,11 +138,11 @@ impl ContainerdRuntime {
             .args(["version"])
             .output()
             .await
-            .map_err(|e| NexaError::Runtime(format!("failed to run ctr: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("failed to run ctr: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "containerd unreachable: {stderr}"
             )));
         }
@@ -157,7 +157,7 @@ impl ContainerdRuntime {
             .args(args)
             .output()
             .await
-            .map_err(|e| NexaError::Runtime(format!("failed to run ctr: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("failed to run ctr: {e}")))?;
         Ok(output)
     }
 
@@ -166,7 +166,7 @@ impl ContainerdRuntime {
         let output = self.ctr(args).await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "ctr {} failed: {}",
                 args.join(" "),
                 stderr.trim()
@@ -218,7 +218,7 @@ impl ContainerRuntime for ContainerdRuntime {
         let log_dir = self.log_dir(&config.name);
         tokio::fs::create_dir_all(&log_dir)
             .await
-            .map_err(|e| NexaError::Runtime(format!("create log dir: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("create log dir: {e}")))?;
 
         info!(id = config.name, "container created");
         Ok(config.name.clone())
@@ -234,7 +234,7 @@ impl ContainerRuntime for ContainerdRuntime {
             if let Some(parent) = log_file.parent() {
                 tokio::fs::create_dir_all(parent)
                     .await
-                    .map_err(|e| NexaError::Runtime(format!("create log dir: {e}")))?;
+                    .map_err(|e| HelyosError::Runtime(format!("create log dir: {e}")))?;
             }
             tokio::fs::OpenOptions::new()
                 .create(true)
@@ -242,7 +242,7 @@ impl ContainerRuntime for ContainerdRuntime {
                 .open(log_file)
                 .await
                 .map_err(|e| {
-                    NexaError::Runtime(format!("create log file {}: {e}", log_file.display()))
+                    HelyosError::Runtime(format!("create log file {}: {e}", log_file.display()))
                 })?;
         }
 
@@ -264,11 +264,11 @@ impl ContainerRuntime for ContainerdRuntime {
             .stderr(std::process::Stdio::piped())
             .output()
             .await
-            .map_err(|e| NexaError::Runtime(format!("failed to run ctr tasks start: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("failed to run ctr tasks start: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "ctr tasks start failed: {}",
                 stderr.trim()
             )));
@@ -427,7 +427,7 @@ impl ContainerRuntime for ContainerdRuntime {
     async fn create_network(&self, name: &str) -> Result<String> {
         let cni = self.cni.lock().await;
         cni.ensure_network(name)
-            .map_err(|e| NexaError::Runtime(format!("create network: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("create network: {e}")))?;
         info!(name, "CNI network created");
         Ok(name.to_string())
     }
@@ -435,7 +435,7 @@ impl ContainerRuntime for ContainerdRuntime {
     async fn remove_network(&self, name: &str) -> Result<()> {
         let cni = self.cni.lock().await;
         cni.remove_network(name)
-            .map_err(|e| NexaError::Runtime(format!("remove network: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("remove network: {e}")))?;
         debug!(name, "CNI network removed");
         Ok(())
     }
@@ -444,7 +444,7 @@ impl ContainerRuntime for ContainerdRuntime {
         let cni = self.cni.lock().await;
         let ip = cni
             .attach(container_id, network)
-            .map_err(|e| NexaError::Runtime(format!("CNI attach: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("CNI attach: {e}")))?;
 
         let mut nmap = self.network_map.lock().await;
         nmap.insert(
@@ -459,7 +459,7 @@ impl ContainerRuntime for ContainerdRuntime {
         let nmap = self.network_map.lock().await;
         match nmap.get(container_id) {
             Some((net, ip)) if net == network => Ok(ip.clone()),
-            _ => Err(NexaError::Runtime(format!(
+            _ => Err(HelyosError::Runtime(format!(
                 "no IP found for container {container_id} on network {network}"
             ))),
         }
@@ -476,12 +476,12 @@ impl ContainerRuntime for ContainerdRuntime {
             .stderr(std::process::Stdio::null())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| NexaError::Runtime(format!("failed to start ctr events: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("failed to start ctr events: {e}")))?;
 
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| NexaError::Runtime("no stdout from ctr events".to_string()))?;
+            .ok_or_else(|| HelyosError::Runtime("no stdout from ctr events".to_string()))?;
 
         let reader = tokio::io::BufReader::new(stdout);
         let lines = tokio_stream::wrappers::LinesStream::new(reader.lines());

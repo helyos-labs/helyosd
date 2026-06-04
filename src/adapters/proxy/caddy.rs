@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use tracing::{info, warn};
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::proxy::{ProxyBackend, RouteConfig, TlsConfig};
 
 pub struct CaddyBackend {
     caddyfile_path: PathBuf,
@@ -71,7 +71,7 @@ impl ProxyBackend for CaddyBackend {
         tokio::fs::write(&self.caddyfile_path, &content)
             .await
             .map_err(|e| {
-                NexaError::Proxy(format!(
+                HelyosError::Proxy(format!(
                     "failed to write Caddyfile {}: {e}",
                     self.caddyfile_path.display()
                 ))
@@ -88,7 +88,7 @@ impl ProxyBackend for CaddyBackend {
                 return Ok(());
             }
             Err(e) => {
-                return Err(NexaError::Proxy(format!("failed to read Caddyfile: {e}")));
+                return Err(HelyosError::Proxy(format!("failed to read Caddyfile: {e}")));
             }
         };
 
@@ -144,7 +144,7 @@ impl ProxyBackend for CaddyBackend {
 
         tokio::fs::write(&self.caddyfile_path, &final_content)
             .await
-            .map_err(|e| NexaError::Proxy(format!("failed to rewrite Caddyfile: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to rewrite Caddyfile: {e}")))?;
         info!(domain, "removed route from Caddyfile");
         Ok(())
     }
@@ -152,7 +152,7 @@ impl ProxyBackend for CaddyBackend {
     async fn reload(&self) -> Result<()> {
         let content = tokio::fs::read_to_string(&self.caddyfile_path)
             .await
-            .map_err(|e| NexaError::Proxy(format!("failed to read Caddyfile for reload: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("failed to read Caddyfile for reload: {e}")))?;
 
         let url = format!("{}/load", self.admin_api);
         let client = reqwest::Client::new();
@@ -162,12 +162,12 @@ impl ProxyBackend for CaddyBackend {
             .body(content)
             .send()
             .await
-            .map_err(|e| NexaError::Proxy(format!("caddy reload request failed: {e}")))?;
+            .map_err(|e| HelyosError::Proxy(format!("caddy reload request failed: {e}")))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(NexaError::Proxy(format!(
+            return Err(HelyosError::Proxy(format!(
                 "caddy reload returned {status}: {body}"
             )));
         }
@@ -188,7 +188,7 @@ impl ProxyBackend for CaddyBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nexa_core::ports::proxy::Upstream;
+    use helyos_core::ports::proxy::Upstream;
 
     fn auto_tls_route() -> RouteConfig {
         RouteConfig {

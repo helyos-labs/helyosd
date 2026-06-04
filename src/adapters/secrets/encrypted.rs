@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use rusqlite::Connection;
 use tokio::sync::Mutex;
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::secrets::SecretStore;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::secrets::SecretStore;
 
 /// AES-256-GCM encrypted secret store backed by SQLite.
 ///
@@ -30,10 +30,10 @@ impl EncryptedSqliteSecretStore {
                 PRIMARY KEY (project, name)
             )",
         )
-        .map_err(|e| NexaError::Secret(format!("failed to init secrets table: {e}")))?;
+        .map_err(|e| HelyosError::Secret(format!("failed to init secrets table: {e}")))?;
 
         let cipher = Aes256Gcm::new_from_slice(master_key)
-            .map_err(|e| NexaError::Secret(format!("invalid key: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("invalid key: {e}")))?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -46,7 +46,7 @@ impl EncryptedSqliteSecretStore {
         let ciphertext = self
             .cipher
             .encrypt(&nonce, plaintext)
-            .map_err(|e| NexaError::Secret(format!("encryption failed: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("encryption failed: {e}")))?;
         let mut blob = nonce.to_vec();
         blob.extend_from_slice(&ciphertext);
         Ok(blob)
@@ -54,13 +54,13 @@ impl EncryptedSqliteSecretStore {
 
     fn decrypt(&self, blob: &[u8]) -> Result<Vec<u8>> {
         if blob.len() < 12 {
-            return Err(NexaError::Secret("ciphertext too short".into()));
+            return Err(HelyosError::Secret("ciphertext too short".into()));
         }
         let (nonce_bytes, ciphertext) = blob.split_at(12);
         let nonce = aes_gcm::Nonce::from_slice(nonce_bytes);
         self.cipher
             .decrypt(nonce, ciphertext)
-            .map_err(|e| NexaError::Secret(format!("decryption failed: {e}")))
+            .map_err(|e| HelyosError::Secret(format!("decryption failed: {e}")))
     }
 }
 
@@ -74,7 +74,7 @@ impl SecretStore for EncryptedSqliteSecretStore {
              ON CONFLICT(project, name) DO UPDATE SET value = excluded.value",
             rusqlite::params![project, name, encrypted],
         )
-        .map_err(|e| NexaError::Secret(format!("failed to set secret: {e}")))?;
+        .map_err(|e| HelyosError::Secret(format!("failed to set secret: {e}")))?;
         Ok(())
     }
 
@@ -82,7 +82,7 @@ impl SecretStore for EncryptedSqliteSecretStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn
             .prepare("SELECT value FROM secrets WHERE project = ?1 AND name = ?2")
-            .map_err(|e| NexaError::Secret(format!("query failed: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("query failed: {e}")))?;
 
         let result: std::result::Result<Vec<u8>, _> =
             stmt.query_row(rusqlite::params![project, name], |row| row.get(0));
@@ -93,7 +93,7 @@ impl SecretStore for EncryptedSqliteSecretStore {
                 Ok(Some(plaintext))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(NexaError::Secret(format!("query failed: {e}"))),
+            Err(e) => Err(HelyosError::Secret(format!("query failed: {e}"))),
         }
     }
 
@@ -101,13 +101,13 @@ impl SecretStore for EncryptedSqliteSecretStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn
             .prepare("SELECT name FROM secrets WHERE project = ?1 ORDER BY name")
-            .map_err(|e| NexaError::Secret(format!("query failed: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("query failed: {e}")))?;
 
         let names = stmt
             .query_map(rusqlite::params![project], |row| row.get(0))
-            .map_err(|e| NexaError::Secret(format!("query failed: {e}")))?
+            .map_err(|e| HelyosError::Secret(format!("query failed: {e}")))?
             .collect::<std::result::Result<Vec<String>, _>>()
-            .map_err(|e| NexaError::Secret(format!("row read failed: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("row read failed: {e}")))?;
 
         Ok(names)
     }
@@ -118,7 +118,7 @@ impl SecretStore for EncryptedSqliteSecretStore {
             "DELETE FROM secrets WHERE project = ?1 AND name = ?2",
             rusqlite::params![project, name],
         )
-        .map_err(|e| NexaError::Secret(format!("delete failed: {e}")))?;
+        .map_err(|e| HelyosError::Secret(format!("delete failed: {e}")))?;
         Ok(())
     }
 }

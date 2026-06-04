@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use nexa_core::domain::models::{
+use helyos_core::domain::models::{
     Deployment, DeploymentMeta, DeploymentSpec, Pod, Project, RestartPolicy,
 };
-use nexa_core::ports::state::StateStore;
+use helyos_core::ports::state::StateStore;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
@@ -15,11 +15,11 @@ fn make_rt() -> Runtime {
 
 /// Set up a store with a project and deployment, returning both plus the tempdir
 /// (caller must keep tempdir alive to prevent deletion).
-async fn setup_store() -> (nexad::adapters::state::SqliteStore, Deployment, TempDir) {
+async fn setup_store() -> (helyosd::adapters::state::SqliteStore, Deployment, TempDir) {
     let dir = TempDir::new().unwrap();
     let db_path = dir.path().join("bench.db");
     let url = format!("sqlite:{}?mode=rwc", db_path.display());
-    let store = nexad::adapters::state::SqliteStore::connect(&url)
+    let store = helyosd::adapters::state::SqliteStore::connect(&url)
         .await
         .expect("connect");
 

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tracing::{error, info, warn};
 
-use nexa_core::ports::route_store::RouteStore;
+use helyos_core::ports::route_store::RouteStore;
 
 use super::acme::AcmeManager;
 
@@ -63,7 +63,7 @@ pub fn spawn_renewal_task(
 mod tests {
     use super::*;
     use crate::adapters::state::memory_route_store::InMemoryRouteStore;
-    use nexa_core::domain::models::Certificate;
+    use helyos_core::domain::models::Certificate;
 
     #[tokio::test]
     async fn renewal_task_starts_and_can_be_cancelled() {

@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use nexa_core::ports::secrets::SecretStore;
+use helyos_core::ports::secrets::SecretStore;
 use rusqlite::Connection;
 use tokio::runtime::Runtime;
 
-use nexad::adapters::secrets::EncryptedSqliteSecretStore;
+use helyosd::adapters::secrets::EncryptedSqliteSecretStore;
 
 fn make_rt() -> Runtime {
     tokio::runtime::Runtime::new().unwrap()

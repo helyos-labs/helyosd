@@ -12,8 +12,8 @@ use bollard::network::{ConnectNetworkOptions, CreateNetworkOptions};
 use futures::StreamExt;
 use tracing::{debug, info};
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::runtime::*;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::runtime::*;
 
 pub struct DockerRuntime {
     client: Docker,
@@ -21,8 +21,8 @@ pub struct DockerRuntime {
 
 impl DockerRuntime {
     pub fn new() -> Result<Self> {
-        let client =
-            Docker::connect_with_local_defaults().map_err(|e| NexaError::Runtime(e.to_string()))?;
+        let client = Docker::connect_with_local_defaults()
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         Ok(Self { client })
     }
 
@@ -30,7 +30,7 @@ impl DockerRuntime {
         self.client
             .ping()
             .await
-            .map_err(|e| NexaError::Runtime(format!("Docker daemon unreachable: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("Docker daemon unreachable: {e}")))?;
         Ok(())
     }
 }
@@ -54,7 +54,7 @@ impl ContainerRuntime for DockerRuntime {
         };
         let mut stream = self.client.create_image(Some(options), None, None);
         while let Some(result) = stream.next().await {
-            result.map_err(|e| NexaError::ImagePull(e.to_string()))?;
+            result.map_err(|e| HelyosError::ImagePull(e.to_string()))?;
         }
         info!(image, "image pulled");
         Ok(())
@@ -129,7 +129,7 @@ impl ContainerRuntime for DockerRuntime {
             .client
             .create_container(Some(options), container_config)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         info!(id = response.id, name = config.name, "container created");
         Ok(response.id)
     }
@@ -138,7 +138,7 @@ impl ContainerRuntime for DockerRuntime {
         self.client
             .start_container::<String>(id, None)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         debug!(id, "container started");
         Ok(())
     }
@@ -150,7 +150,7 @@ impl ContainerRuntime for DockerRuntime {
         self.client
             .stop_container(id, Some(options))
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         debug!(id, "container stopped");
         Ok(())
     }
@@ -164,7 +164,7 @@ impl ContainerRuntime for DockerRuntime {
         self.client
             .remove_container(id, Some(options))
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         debug!(id, "container removed");
         Ok(())
     }
@@ -174,7 +174,7 @@ impl ContainerRuntime for DockerRuntime {
             .client
             .inspect_container(id, None)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         let state = match info.state.and_then(|s| s.status) {
             Some(bollard::models::ContainerStateStatusEnum::RUNNING) => ContainerState::Running,
             Some(bollard::models::ContainerStateStatusEnum::CREATED) => ContainerState::Created,
@@ -210,7 +210,7 @@ impl ContainerRuntime for DockerRuntime {
         let stream = self.client.logs(id, Some(options));
         let mapped = stream.map(|result| match result {
             Ok(output) => Ok(output.to_string()),
-            Err(e) => Err(NexaError::Runtime(e.to_string())),
+            Err(e) => Err(HelyosError::Runtime(e.to_string())),
         });
         Ok(Box::pin(mapped))
     }
@@ -226,7 +226,7 @@ impl ContainerRuntime for DockerRuntime {
             .client
             .list_containers(Some(options))
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         let full_name = format!("/{name}");
         Ok(containers
             .iter()
@@ -237,14 +237,14 @@ impl ContainerRuntime for DockerRuntime {
         let options = CreateNetworkOptions {
             name: name.to_string(),
             driver: "bridge".to_string(),
-            labels: HashMap::from([("managed-by".to_string(), "nexanet".to_string())]),
+            labels: HashMap::from([("managed-by".to_string(), "helyos".to_string())]),
             ..Default::default()
         };
         let response = self
             .client
             .create_network(options)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         info!(name, "network created");
         Ok(response.id)
     }
@@ -253,7 +253,7 @@ impl ContainerRuntime for DockerRuntime {
         self.client
             .remove_network(name)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         debug!(name, "network removed");
         Ok(())
     }
@@ -266,7 +266,7 @@ impl ContainerRuntime for DockerRuntime {
         self.client
             .connect_network(network, options)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
         debug!(container_id, network, "connected to network");
         Ok(())
     }
@@ -276,7 +276,7 @@ impl ContainerRuntime for DockerRuntime {
             .client
             .inspect_container(container_id, None)
             .await
-            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+            .map_err(|e| HelyosError::Runtime(e.to_string()))?;
 
         let ip = info
             .network_settings
@@ -285,7 +285,7 @@ impl ContainerRuntime for DockerRuntime {
             .and_then(|ep| ep.ip_address)
             .filter(|ip| !ip.is_empty())
             .ok_or_else(|| {
-                NexaError::Runtime(format!(
+                HelyosError::Runtime(format!(
                     "no IP found for container {container_id} on network {network}"
                 ))
             })?;
@@ -303,7 +303,7 @@ impl ContainerRuntime for DockerRuntime {
             "event".to_string(),
             vec!["die".to_string(), "start".to_string(), "oom".to_string()],
         );
-        filters.insert("label".to_string(), vec!["managed-by=nexanet".to_string()]);
+        filters.insert("label".to_string(), vec!["managed-by=helyos".to_string()]);
 
         let options = EventsOptions::<String> {
             since: None,
@@ -320,7 +320,7 @@ impl ContainerRuntime for DockerRuntime {
                     let actor = event.actor.as_ref();
                     let container_id = actor
                         .and_then(|a| a.attributes.as_ref())
-                        .and_then(|attrs| attrs.get("nexa.pod-id"))
+                        .and_then(|attrs| attrs.get("helyos.pod-id"))
                         .cloned()
                         .unwrap_or_default();
 

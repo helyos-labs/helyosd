@@ -6,10 +6,10 @@ use tonic::transport::Channel;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use nexa_core::domain::models::*;
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::cluster::ClusterTransport;
-use nexa_core::ports::runtime::LogStream;
+use helyos_core::domain::models::*;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::cluster::ClusterTransport;
+use helyos_core::ports::runtime::LogStream;
 
 use crate::cluster::proto;
 use crate::cluster::proto::cluster_service_client::ClusterServiceClient;
@@ -30,10 +30,10 @@ impl GrpcTransport {
     pub async fn add_client(&self, node_id: Uuid, address: &str) -> Result<()> {
         let endpoint = format!("http://{address}");
         let channel = Channel::from_shared(endpoint)
-            .map_err(|e| NexaError::Runtime(format!("invalid endpoint: {e}")))?
+            .map_err(|e| HelyosError::Runtime(format!("invalid endpoint: {e}")))?
             .connect()
             .await
-            .map_err(|e| NexaError::Runtime(format!("gRPC connect failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("gRPC connect failed: {e}")))?;
         let client = ClusterServiceClient::new(channel);
         self.clients.write().await.insert(node_id, client);
         info!(node_id = %node_id, "gRPC client connected");
@@ -50,7 +50,7 @@ impl GrpcTransport {
             .await
             .get(node_id)
             .cloned()
-            .ok_or_else(|| NexaError::Runtime(format!("no gRPC client for node {node_id}")))
+            .ok_or_else(|| HelyosError::Runtime(format!("no gRPC client for node {node_id}")))
     }
 }
 
@@ -59,10 +59,10 @@ impl ClusterTransport for GrpcTransport {
     async fn register_node(&self, node: &Node) -> Result<()> {
         let endpoint = format!("http://{}", self.master_addr);
         let channel = Channel::from_shared(endpoint)
-            .map_err(|e| NexaError::Runtime(format!("invalid master endpoint: {e}")))?
+            .map_err(|e| HelyosError::Runtime(format!("invalid master endpoint: {e}")))?
             .connect()
             .await
-            .map_err(|e| NexaError::Runtime(format!("cannot reach master: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("cannot reach master: {e}")))?;
         let mut client = ClusterServiceClient::new(channel);
         let request = tonic::Request::new(proto::RegisterRequest {
             node_name: node.name.clone(),
@@ -79,10 +79,10 @@ impl ClusterTransport for GrpcTransport {
         let response = client
             .register(request)
             .await
-            .map_err(|e| NexaError::Runtime(format!("register RPC failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("register RPC failed: {e}")))?;
         let resp = response.into_inner();
         if !resp.accepted {
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "registration rejected: {}",
                 resp.message
             )));
@@ -104,9 +104,9 @@ impl ClusterTransport for GrpcTransport {
     async fn assign_pod(&self, node_id: &Uuid, pod: &Pod, spec: &DeploymentSpec) -> Result<()> {
         let mut client = self.get_client(node_id).await?;
         let pod_data = serde_json::to_vec(pod)
-            .map_err(|e| NexaError::Runtime(format!("serialize pod: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("serialize pod: {e}")))?;
         let spec_data = serde_json::to_vec(spec)
-            .map_err(|e| NexaError::Runtime(format!("serialize spec: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("serialize spec: {e}")))?;
         let request = tonic::Request::new(proto::AssignPodRequest {
             node_id: node_id.to_string(),
             pod_id: pod.id.to_string(),
@@ -116,10 +116,10 @@ impl ClusterTransport for GrpcTransport {
         let response = client
             .assign_pod(request)
             .await
-            .map_err(|e| NexaError::Runtime(format!("assign_pod RPC failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("assign_pod RPC failed: {e}")))?;
         let resp = response.into_inner();
         if !resp.success {
-            return Err(NexaError::Runtime(format!(
+            return Err(HelyosError::Runtime(format!(
                 "assign_pod rejected: {}",
                 resp.message
             )));
@@ -137,9 +137,9 @@ impl ClusterTransport for GrpcTransport {
         let response = client
             .stop_pod(request)
             .await
-            .map_err(|e| NexaError::Runtime(format!("stop_pod RPC failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("stop_pod RPC failed: {e}")))?;
         if !response.into_inner().success {
-            return Err(NexaError::Runtime("stop_pod rejected by worker".into()));
+            return Err(HelyosError::Runtime("stop_pod rejected by worker".into()));
         }
         Ok(())
     }
@@ -153,9 +153,9 @@ impl ClusterTransport for GrpcTransport {
         let response = client
             .remove_pod(request)
             .await
-            .map_err(|e| NexaError::Runtime(format!("remove_pod RPC failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("remove_pod RPC failed: {e}")))?;
         if !response.into_inner().success {
-            return Err(NexaError::Runtime("remove_pod rejected by worker".into()));
+            return Err(HelyosError::Runtime("remove_pod rejected by worker".into()));
         }
         Ok(())
     }
@@ -175,12 +175,12 @@ impl ClusterTransport for GrpcTransport {
         let response = client
             .stream_logs(request)
             .await
-            .map_err(|e| NexaError::Runtime(format!("stream_logs RPC failed: {e}")))?;
+            .map_err(|e| HelyosError::Runtime(format!("stream_logs RPC failed: {e}")))?;
         let stream = response.into_inner();
         use futures::StreamExt;
         let mapped = stream.map(|result| match result {
             Ok(chunk) => Ok(chunk.line),
-            Err(e) => Err(NexaError::Runtime(format!("log stream error: {e}"))),
+            Err(e) => Err(HelyosError::Runtime(format!("log stream error: {e}"))),
         });
         Ok(Box::pin(mapped))
     }

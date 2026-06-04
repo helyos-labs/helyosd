@@ -9,7 +9,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: nexad
+  BINARY_NAME: helyosd
 
 jobs:
   build:
@@ -80,16 +80,16 @@ jobs:
         with:
           path: .
           format: spdx-json
-          output-file: nexad.sbom.spdx.json
+          output-file: helyosd.sbom.spdx.json
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
       - name: Generate checksums
-        run: sha256sum *.tar.gz nexad.sbom.spdx.json > sha256sums.txt
+        run: sha256sum *.tar.gz helyosd.sbom.spdx.json > sha256sums.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             *.tar.gz
             sha256sums.txt
-            nexad.sbom.spdx.json
+            helyosd.sbom.spdx.json
           generate_release_notes: true

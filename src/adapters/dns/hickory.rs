@@ -8,8 +8,8 @@ use parking_lot::Mutex;
 use tokio::net::{TcpListener, UdpSocket};
 use tracing::{error, info, warn};
 
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::dns::DnsProvider;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::dns::DnsProvider;
 
 use super::record_store::DnsRecordStore;
 
@@ -98,19 +98,18 @@ impl HickoryDnsProvider {
         let upstream_dns = self.upstream_dns;
 
         let udp_socket = UdpSocket::bind(listen_addr).await.map_err(|e| {
-            NexaError::Runtime(format!("failed to bind DNS UDP on {listen_addr}: {e}"))
+            HelyosError::Runtime(format!("failed to bind DNS UDP on {listen_addr}: {e}"))
         })?;
 
         let tcp_listener = TcpListener::bind(listen_addr).await.map_err(|e| {
-            NexaError::Runtime(format!("failed to bind DNS TCP on {listen_addr}: {e}"))
+            HelyosError::Runtime(format!("failed to bind DNS TCP on {listen_addr}: {e}"))
         })?;
 
         // Bind a single socket for all upstream DNS forwarding to avoid
         // creating (and leaking) a file descriptor per query.
-        let udp_upstream_socket =
-            Arc::new(UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-                NexaError::Runtime(format!("failed to bind upstream UDP socket: {e}"))
-            })?);
+        let udp_upstream_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
+            HelyosError::Runtime(format!("failed to bind upstream UDP socket: {e}"))
+        })?);
 
         info!(%listen_addr, %upstream_dns, "starting embedded DNS server");
 

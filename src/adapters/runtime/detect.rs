@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use nexa_core::ports::runtime::ContainerRuntime;
+use helyos_core::ports::runtime::ContainerRuntime;
 
 use tracing::info;
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use nexa_core::domain::orchestrator::OrchestratorHandle;
+use helyos_core::domain::orchestrator::OrchestratorHandle;
 use reqwest::Client;
 use tracing::{debug, info};
 

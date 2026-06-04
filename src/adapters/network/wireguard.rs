@@ -5,7 +5,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use tracing::info;
 use x25519_dalek::{PublicKey, StaticSecret};
 
-use nexa_core::error::Result;
+use helyos_core::error::Result;
 
 /// **Experimental**: WireGuard overlay uses boringtun userspace mode.
 /// `create_tunnel` currently only logs — actual tunnel creation is not yet implemented.

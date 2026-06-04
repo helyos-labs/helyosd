@@ -9,9 +9,9 @@ use futures::StreamExt;
 use serde::Deserialize;
 use std::time::Instant;
 
-use nexa_core::config::parse_deployment;
-use nexa_core::domain::scheduler::SchedulerConfig;
-use nexa_core::error::NexaError;
+use helyos_core::config::parse_deployment;
+use helyos_core::domain::scheduler::SchedulerConfig;
+use helyos_core::error::HelyosError;
 
 use tokio::sync::broadcast;
 
@@ -208,7 +208,7 @@ pub async fn delete_project(
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             let status = match &e {
-                NexaError::ProjectNotEmpty(_) => StatusCode::CONFLICT,
+                HelyosError::ProjectNotEmpty(_) => StatusCode::CONFLICT,
                 _ => StatusCode::NOT_FOUND,
             };
             (status, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
@@ -347,7 +347,7 @@ pub async fn drain_node(
 ) -> impl IntoResponse {
     match state.store.get_node_by_name(&name).await {
         Ok(Some(mut node)) => {
-            node.status = nexa_core::domain::models::NodeStatus::Draining;
+            node.status = helyos_core::domain::models::NodeStatus::Draining;
             match state.store.update_node(&node).await {
                 Ok(()) => StatusCode::OK.into_response(),
                 Err(e) => (
@@ -376,8 +376,8 @@ pub async fn remove_node(
 ) -> impl IntoResponse {
     match state.store.get_node_by_name(&name).await {
         Ok(Some(node)) => {
-            if node.status != nexa_core::domain::models::NodeStatus::Draining
-                && node.role != nexa_core::domain::models::NodeRole::Master
+            if node.status != helyos_core::domain::models::NodeStatus::Draining
+                && node.role != helyos_core::domain::models::NodeRole::Master
             {
                 return (
                     StatusCode::CONFLICT,
@@ -638,7 +638,7 @@ pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
     let pod_count = match state.store.list_pods(None).await {
         Ok(pods) => pods
             .iter()
-            .filter(|p| p.status == nexa_core::domain::models::PodStatus::Running)
+            .filter(|p| p.status == helyos_core::domain::models::PodStatus::Running)
             .count() as u32,
         Err(_) => 0,
     };

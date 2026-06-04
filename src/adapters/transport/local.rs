@@ -5,10 +5,10 @@ use async_trait::async_trait;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use nexa_core::domain::models::*;
-use nexa_core::error::{NexaError, Result};
-use nexa_core::ports::cluster::ClusterTransport;
-use nexa_core::ports::runtime::*;
+use helyos_core::domain::models::*;
+use helyos_core::error::{HelyosError, Result};
+use helyos_core::ports::cluster::ClusterTransport;
+use helyos_core::ports::runtime::*;
 
 pub struct LocalTransport {
     runtime: Arc<dyn ContainerRuntime>,
@@ -38,7 +38,7 @@ impl ClusterTransport for LocalTransport {
 
     async fn assign_pod(&self, _node_id: &Uuid, pod: &Pod, spec: &DeploymentSpec) -> Result<()> {
         let container_name = pod.container_name();
-        let network_name = format!("nexa-{}", spec.project);
+        let network_name = format!("helyos-{}", spec.project);
 
         info!(
             name = container_name,
@@ -68,10 +68,13 @@ impl ClusterTransport for LocalTransport {
             .collect();
 
         let mut labels = HashMap::new();
-        labels.insert("managed-by".to_string(), "nexanet".to_string());
-        labels.insert("nexa.project".to_string(), spec.project.clone());
-        labels.insert("nexa.deployment".to_string(), spec.deployment.name.clone());
-        labels.insert("nexa.pod-id".to_string(), pod.id.to_string());
+        labels.insert("managed-by".to_string(), "helyos".to_string());
+        labels.insert("helyos.project".to_string(), spec.project.clone());
+        labels.insert(
+            "helyos.deployment".to_string(),
+            spec.deployment.name.clone(),
+        );
+        labels.insert("helyos.pod-id".to_string(), pod.id.to_string());
 
         // VolumeSpec uses source_name() and mount_point() methods
         let volumes: Vec<VolumeBinding> = spec
@@ -120,7 +123,7 @@ impl ClusterTransport for LocalTransport {
         _pod_id: &Uuid,
         _tail: Option<u64>,
     ) -> Result<LogStream> {
-        Err(NexaError::Runtime(
+        Err(HelyosError::Runtime(
             "local transport: use runtime.logs() directly".into(),
         ))
     }

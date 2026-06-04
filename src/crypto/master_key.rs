@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use nexa_core::error::{NexaError, Result};
+use helyos_core::error::{HelyosError, Result};
 
 const KEY_LEN: usize = 32;
 
@@ -17,10 +17,10 @@ pub fn load_or_generate(data_dir: &Path) -> Result<[u8; KEY_LEN]> {
 }
 
 fn load_key(path: &Path) -> Result<[u8; KEY_LEN]> {
-    let bytes =
-        fs::read(path).map_err(|e| NexaError::Secret(format!("failed to read master key: {e}")))?;
+    let bytes = fs::read(path)
+        .map_err(|e| HelyosError::Secret(format!("failed to read master key: {e}")))?;
     if bytes.len() != KEY_LEN {
-        return Err(NexaError::Secret(format!(
+        return Err(HelyosError::Secret(format!(
             "master key invalid length: expected {KEY_LEN}, got {}",
             bytes.len()
         )));
@@ -35,19 +35,20 @@ fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
     use rand::rngs::OsRng;
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| NexaError::Secret(format!("mkdir failed: {e}")))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| HelyosError::Secret(format!("mkdir failed: {e}")))?;
     }
 
     let mut key = [0u8; KEY_LEN];
     OsRng.fill_bytes(&mut key);
 
-    fs::write(path, key).map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
+    fs::write(path, key).map_err(|e| HelyosError::Secret(format!("write key failed: {e}")))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|e| NexaError::Secret(format!("set perms failed: {e}")))?;
+            .map_err(|e| HelyosError::Secret(format!("set perms failed: {e}")))?;
     }
 
     Ok(key)

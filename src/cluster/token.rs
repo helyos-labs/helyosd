@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 
-use nexa_core::error::{NexaError, Result};
+use helyos_core::error::{HelyosError, Result};
 
 const TOKEN_PREFIX: &str = "nxa_";
 const TOKEN_RANDOM_BYTES: usize = 32;
@@ -33,18 +33,18 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 pub fn validate_token_format(token: &str) -> Result<()> {
     if !token.starts_with(TOKEN_PREFIX) {
-        return Err(NexaError::Runtime("token must start with 'nxa_'".into()));
+        return Err(HelyosError::Runtime("token must start with 'nxa_'".into()));
     }
     let hex_part = &token[TOKEN_PREFIX.len()..];
     if hex_part.len() != TOKEN_RANDOM_BYTES * 2 {
-        return Err(NexaError::Runtime(format!(
+        return Err(HelyosError::Runtime(format!(
             "token hex part must be {} characters, got {}",
             TOKEN_RANDOM_BYTES * 2,
             hex_part.len()
         )));
     }
     if hex::decode(hex_part).is_err() {
-        return Err(NexaError::Runtime("token contains invalid hex".into()));
+        return Err(HelyosError::Runtime("token contains invalid hex".into()));
     }
     Ok(())
 }

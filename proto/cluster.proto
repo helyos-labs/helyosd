@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package nexa.cluster.v1;
+package helyos.cluster.v1;
 
 import "google/protobuf/empty.proto";
 
