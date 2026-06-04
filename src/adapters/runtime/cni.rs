@@ -68,7 +68,10 @@ impl SubnetAllocator {
         let mut next = self.next_octet.lock();
         if *next == 0 {
             return Err(nexa_core::error::NexaError::Runtime(
-                "subnet pool exhausted (255 /24 networks allocated)".into(),
+                "subnet pool exhausted: all 255 /24 subnets in 172.20.0.0/16 have been \
+                 assigned (the allocator hands out octets monotonically and does not \
+                 reclaim released subnets)"
+                    .into(),
             ));
         }
         let octet = *next;

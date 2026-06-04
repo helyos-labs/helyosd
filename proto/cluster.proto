@@ -2,13 +2,15 @@ syntax = "proto3";
 
 package nexa.cluster.v1;
 
+import "google/protobuf/empty.proto";
+
 service ClusterService {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(stream HeartbeatPing) returns (stream HeartbeatPong);
     rpc AssignPod(AssignPodRequest) returns (AssignPodResponse);
     rpc StopPod(StopPodRequest) returns (StopPodResponse);
     rpc RemovePod(RemovePodRequest) returns (RemovePodResponse);
-    rpc ReportStatus(StatusReport) returns (Empty);
+    rpc ReportStatus(StatusReport) returns (google.protobuf.Empty);
     rpc StreamLogs(LogsRequest) returns (stream LogChunk);
 }
 
@@ -119,8 +121,6 @@ message StatusReport {
     string node_id = 1;
     repeated PodStatusInfo pod_statuses = 2;
 }
-
-message Empty {}
 
 message LogsRequest {
     string node_id = 1;

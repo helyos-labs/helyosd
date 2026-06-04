@@ -15,6 +15,11 @@ use nexa_core::ports::runtime::ContainerRuntime;
 use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
 
+/// Capacity of the broadcast channel that fans cluster events out to SSE
+/// subscribers. Slow consumers that fall this far behind are lagged (dropped),
+/// not blocking the producer.
+const CLUSTER_EVENT_CHANNEL_CAPACITY: usize = 256;
+
 fn default_data_dir() -> String {
     dirs::home_dir()
         .map(|h| h.join(".nexa").join("data"))
@@ -195,7 +200,8 @@ fn init_proxy(
             let caddyfile = PathBuf::from(&cli.proxy_config_dir).join("Caddyfile");
             Arc::new(CaddyBackend::new(caddyfile, "http://localhost:2019".into()))
         }
-        "traefik" | _ => {
+        // traefik is the default backend (handles "traefik" and any unknown value)
+        _ => {
             let config_path = PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
             Arc::new(TraefikBackend::new(config_path))
         }
@@ -369,7 +375,8 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) = tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
+    let (event_tx, _) =
+        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(CLUSTER_EVENT_CHANNEL_CAPACITY);
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -419,7 +426,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) = tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
+    let (event_tx, _) =
+        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(CLUSTER_EVENT_CHANNEL_CAPACITY);
     let handle = spawn_orchestrator(
         &runtime,
         &store,
