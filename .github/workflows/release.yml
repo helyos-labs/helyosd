@@ -74,14 +74,22 @@ jobs:
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: nexad.sbom.spdx.json
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
       - name: Generate checksums
-        run: sha256sum *.tar.gz > sha256sums.txt
+        run: sha256sum *.tar.gz nexad.sbom.spdx.json > sha256sums.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             *.tar.gz
             sha256sums.txt
+            nexad.sbom.spdx.json
           generate_release_notes: true

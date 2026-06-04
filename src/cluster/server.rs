@@ -288,7 +288,7 @@ impl ClusterService for ClusterServer {
     async fn report_status(
         &self,
         request: Request<proto::StatusReport>,
-    ) -> std::result::Result<Response<proto::Empty>, Status> {
+    ) -> std::result::Result<Response<()>, Status> {
         let report = request.into_inner();
         let node_id = Uuid::parse_str(&report.node_id)
             .map_err(|_| Status::invalid_argument("bad node_id"))?;
@@ -300,7 +300,7 @@ impl ClusterService for ClusterServer {
                 "status report from worker"
             );
         }
-        Ok(Response::new(proto::Empty {}))
+        Ok(Response::new(()))
     }
 
     type StreamLogsStream =

@@ -68,6 +68,56 @@ pub fn normalize_image_ref(image: &str) -> String {
     }
 }
 
+/// Build the `ctr containers create` argument vector for a container config.
+///
+/// Pure helper extracted so argument construction (env/label/mount formatting)
+/// can be unit-tested without invoking `ctr`. `normalized` is the
+/// already-normalized image reference.
+fn build_create_args(normalized: &str, config: &ContainerConfig) -> Vec<String> {
+    let mut args: Vec<String> = vec![
+        "containers".to_string(),
+        "create".to_string(),
+        normalized.to_string(),
+        config.name.clone(),
+    ];
+
+    // Environment variables.
+    for (k, v) in &config.env {
+        args.push("--env".to_string());
+        args.push(format!("{k}={v}"));
+    }
+
+    // Labels.
+    for (k, v) in &config.labels {
+        args.push("--label".to_string());
+        args.push(format!("{k}={v}"));
+    }
+
+    // Mount binds.
+    for vol in &config.volumes {
+        let opts = if vol.read_only {
+            "rbind:ro"
+        } else {
+            "rbind:rw"
+        };
+        args.push("--mount".to_string());
+        args.push(format!(
+            "type=bind,src={},dst={},options={}",
+            vol.source, vol.target, opts
+        ));
+    }
+
+    args
+}
+
+/// Format a containerd log-uri (`file://<path>`) from a log file path.
+///
+/// Pure helper extracted so URI formatting can be tested without spawning
+/// `ctr tasks start`.
+fn log_uri(path: &std::path::Path) -> String {
+    format!("file://{}", path.to_string_lossy())
+}
+
 impl ContainerdRuntime {
     /// Create a new runtime backed by the `ctr` CLI.
     ///
@@ -159,38 +209,7 @@ impl ContainerRuntime for ContainerdRuntime {
         let normalized = normalize_image_ref(&config.image);
         debug!(name = config.name, image = %normalized, "creating container via ctr");
 
-        let mut args: Vec<String> = vec![
-            "containers".to_string(),
-            "create".to_string(),
-            normalized,
-            config.name.clone(),
-        ];
-
-        // Environment variables.
-        for (k, v) in &config.env {
-            args.push("--env".to_string());
-            args.push(format!("{k}={v}"));
-        }
-
-        // Labels.
-        for (k, v) in &config.labels {
-            args.push("--label".to_string());
-            args.push(format!("{k}={v}"));
-        }
-
-        // Mount binds.
-        for vol in &config.volumes {
-            let opts = if vol.read_only {
-                "rbind:ro"
-            } else {
-                "rbind:rw"
-            };
-            args.push("--mount".to_string());
-            args.push(format!(
-                "type=bind,src={},dst={},options={}",
-                vol.source, vol.target, opts
-            ));
-        }
+        let args = build_create_args(&normalized, config);
 
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         self.ctr_ok(&arg_refs).await?;
@@ -227,8 +246,8 @@ impl ContainerRuntime for ContainerdRuntime {
                 })?;
         }
 
-        let stdout_uri = format!("file://{}", stdout_log.to_string_lossy());
-        let stderr_uri = format!("file://{}", stderr_log.to_string_lossy());
+        let stdout_uri = log_uri(&stdout_log);
+        let stderr_uri = log_uri(&stderr_log);
 
         // Start the task and redirect stdout/stderr to log files via
         // containerd's log-uri mechanism.
@@ -541,6 +560,23 @@ fn extract_exit_code(line: &str) -> Option<i64> {
 mod tests {
     use super::*;
 
+    fn cfg(name: &str, image: &str) -> ContainerConfig {
+        ContainerConfig {
+            name: name.into(),
+            image: image.into(),
+            command: vec![],
+            env: HashMap::new(),
+            ports: vec![],
+            volumes: vec![],
+            labels: HashMap::new(),
+            network: None,
+            dns: vec![],
+            dns_search: vec![],
+        }
+    }
+
+    // ---- normalize_image_ref ----
+
     #[test]
     fn normalize_bare_image() {
         assert_eq!(
@@ -578,6 +614,136 @@ mod tests {
         assert_eq!(
             normalize_image_ref("docker.io/library/nginx:latest"),
             "docker.io/library/nginx:latest"
+        );
+    }
+
+    #[test]
+    fn normalize_org_without_tag_gets_latest() {
+        assert_eq!(
+            normalize_image_ref("myorg/myimg"),
+            "docker.io/myorg/myimg:latest"
+        );
+    }
+
+    #[test]
+    fn normalize_registry_without_tag_gets_latest() {
+        assert_eq!(
+            normalize_image_ref("ghcr.io/org/img"),
+            "ghcr.io/org/img:latest"
+        );
+    }
+
+    // ---- build_create_args ----
+
+    #[test]
+    fn create_args_have_fixed_prefix() {
+        let args = build_create_args("docker.io/library/nginx:latest", &cfg("web", "nginx"));
+        assert_eq!(
+            &args[0..4],
+            &[
+                "containers",
+                "create",
+                "docker.io/library/nginx:latest",
+                "web"
+            ]
+        );
+    }
+
+    #[test]
+    fn create_args_include_env_pairs() {
+        let mut c = cfg("web", "nginx");
+        c.env.insert("FOO".into(), "bar".into());
+        let args = build_create_args("img", &c);
+        let pos = args.iter().position(|a| a == "--env").expect("--env flag");
+        assert_eq!(args[pos + 1], "FOO=bar");
+    }
+
+    #[test]
+    fn create_args_include_label_pairs() {
+        let mut c = cfg("web", "nginx");
+        c.labels.insert("app".into(), "api".into());
+        let args = build_create_args("img", &c);
+        let pos = args
+            .iter()
+            .position(|a| a == "--label")
+            .expect("--label flag");
+        assert_eq!(args[pos + 1], "app=api");
+    }
+
+    #[test]
+    fn create_args_format_mount_options_by_readonly() {
+        let mut c = cfg("web", "nginx");
+        c.volumes = vec![
+            VolumeBinding {
+                source: "/data".into(),
+                target: "/var/data".into(),
+                read_only: false,
+            },
+            VolumeBinding {
+                source: "/etc/conf".into(),
+                target: "/conf".into(),
+                read_only: true,
+            },
+        ];
+        let args = build_create_args("img", &c);
+        assert!(
+            args.iter()
+                .any(|a| a == "type=bind,src=/data,dst=/var/data,options=rbind:rw")
+        );
+        assert!(
+            args.iter()
+                .any(|a| a == "type=bind,src=/etc/conf,dst=/conf,options=rbind:ro")
+        );
+    }
+
+    // ---- log_uri ----
+
+    #[test]
+    fn log_uri_prefixes_file_scheme() {
+        assert_eq!(
+            log_uri(std::path::Path::new("/var/log/c1/stdout.log")),
+            "file:///var/log/c1/stdout.log"
+        );
+    }
+
+    // ---- extract_container_id / extract_exit_code ----
+
+    #[test]
+    fn extract_container_id_from_json_payload() {
+        let line = r#"2024-01-01 /tasks/exit {"container_id":"abc123","exit_status":137}"#;
+        assert_eq!(extract_container_id(line), Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn extract_container_id_absent_returns_none() {
+        assert_eq!(extract_container_id("2024 /tasks/start {}"), None);
+    }
+
+    #[test]
+    fn extract_exit_code_from_json_payload() {
+        let line = r#"2024-01-01 /tasks/exit {"container_id":"abc123","exit_status":137}"#;
+        assert_eq!(extract_exit_code(line), Some(137));
+    }
+
+    #[test]
+    fn extract_exit_code_absent_returns_none() {
+        assert_eq!(extract_exit_code("2024 /tasks/start {}"), None);
+    }
+
+    // ---- path builders (offline; ContainerdRuntime::new does no I/O) ----
+
+    #[test]
+    fn log_paths_are_under_data_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = ContainerdRuntime::new(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(rt.log_dir("c1"), dir.path().join("logs").join("c1"));
+        assert_eq!(
+            rt.stdout_log_path("c1"),
+            dir.path().join("logs").join("c1").join("stdout.log")
+        );
+        assert_eq!(
+            rt.stderr_log_path("c1"),
+            dir.path().join("logs").join("c1").join("stderr.log")
         );
     }
 }
