@@ -22,16 +22,13 @@ jobs:
       #     which sqlx-macros links unconditionally; we use the sqlite driver
       #     only, so the RSA code path is never executed. No fixed release.
       #   RUSTSEC-2025-0134 — rustls-pemfile unmaintained, transitive via tonic.
-      #   RUSTSEC-2025-0067/0068 — serde_yml/libyml unsound+unmaintained
-      #     (trusted-config YAML parser; serde_yaml_ng migration is a follow-up).
-      # protobuf (RUSTSEC-2024-0437) and time (RUSTSEC-2026-0009) are FIXED, not
-      # ignored (prometheus default-features=false; time >= 0.3.47).
+      # Fixed (not ignored): protobuf RUSTSEC-2024-0437 (prometheus
+      # default-features=false), time RUSTSEC-2026-0009 (>= 0.3.47), and
+      # serde_yml/libyml RUSTSEC-2025-0067/0068 (serde_yml -> serde_yaml_ng).
       - run: >
           cargo audit
           --ignore RUSTSEC-2023-0071
           --ignore RUSTSEC-2025-0134
-          --ignore RUSTSEC-2025-0067
-          --ignore RUSTSEC-2025-0068
 
   check:
     name: Check

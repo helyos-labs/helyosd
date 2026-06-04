@@ -136,7 +136,7 @@ impl TraefikBackend {
 impl ProxyBackend for TraefikBackend {
     async fn apply_routes(&self, routes: &[RouteConfig]) -> Result<()> {
         let config = Self::render_config(routes);
-        let yaml = serde_yaml::to_string(&config)
+        let yaml = serde_yaml_ng::to_string(&config)
             .map_err(|e| NexaError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
         tokio::fs::write(&self.config_path, &yaml)
@@ -164,7 +164,7 @@ impl ProxyBackend for TraefikBackend {
             }
         };
 
-        let mut config: TraefikDynamicConfig = serde_yaml::from_str(&content)
+        let mut config: TraefikDynamicConfig = serde_yaml_ng::from_str(&content)
             .map_err(|e| NexaError::Proxy(format!("failed to parse traefik config: {e}")))?;
 
         let sanitized = domain.replace('.', "-");
@@ -174,7 +174,7 @@ impl ProxyBackend for TraefikBackend {
         config.http.routers.remove(&router_name);
         config.http.services.remove(&service_name);
 
-        let yaml = serde_yaml::to_string(&config)
+        let yaml = serde_yaml_ng::to_string(&config)
             .map_err(|e| NexaError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
         tokio::fs::write(&self.config_path, &yaml)
@@ -196,7 +196,7 @@ impl ProxyBackend for TraefikBackend {
             Err(_) => return Ok(false),
         };
 
-        match serde_yaml::from_str::<TraefikDynamicConfig>(&content) {
+        match serde_yaml_ng::from_str::<TraefikDynamicConfig>(&content) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -240,10 +240,10 @@ mod tests {
     #[test]
     fn render_config_produces_valid_yaml() {
         let config = TraefikBackend::render_config(&sample_routes());
-        let yaml = serde_yaml::to_string(&config).unwrap();
+        let yaml = serde_yaml_ng::to_string(&config).unwrap();
 
         // Verify it roundtrips
-        let parsed: TraefikDynamicConfig = serde_yaml::from_str(&yaml).unwrap();
+        let parsed: TraefikDynamicConfig = serde_yaml_ng::from_str(&yaml).unwrap();
         assert_eq!(parsed.http.routers.len(), 2);
         assert_eq!(parsed.http.services.len(), 2);
 
@@ -305,7 +305,7 @@ mod tests {
         let content = tokio::fs::read_to_string(&config_path).await.unwrap();
 
         // Parse back and verify
-        let parsed: TraefikDynamicConfig = serde_yaml::from_str(&content).unwrap();
+        let parsed: TraefikDynamicConfig = serde_yaml_ng::from_str(&content).unwrap();
         assert_eq!(parsed.http.routers.len(), 2);
     }
 
@@ -321,7 +321,7 @@ mod tests {
         backend.remove_route("app.example.com").await.unwrap();
 
         let content = tokio::fs::read_to_string(&config_path).await.unwrap();
-        let parsed: TraefikDynamicConfig = serde_yaml::from_str(&content).unwrap();
+        let parsed: TraefikDynamicConfig = serde_yaml_ng::from_str(&content).unwrap();
 
         assert_eq!(parsed.http.routers.len(), 1);
         assert!(!parsed.http.routers.contains_key("nexa-app-example-com"));
