@@ -29,6 +29,16 @@ impl SqliteStore {
         Ok(Self { pool })
     }
 
+    /// Return a handle to the underlying connection pool.
+    ///
+    /// `SqlitePool` is internally reference-counted, so the clone is cheap and
+    /// shares the same connections. Used by helyosd-local stores (e.g. the API
+    /// token store) that need direct DB access without going through the
+    /// `StateStore` port.
+    pub fn pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     fn row_to_deployment(row: &SqliteRow) -> Result<Deployment> {
         let id_str: String = row.get("id");
         let id = id_str
