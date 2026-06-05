@@ -120,17 +120,17 @@ pub async fn require_bearer_token(
 
     // 2. Legacy single-token fallback.
     if let Some(ref expected_hash) = state.api_token_hash {
-        if let Some(ref token) = presented {
-            if verify_api_token(token, expected_hash) {
-                // Honor revocation of the seeded legacy-default row.
-                if let Ok(Some(rec)) = state.token_store.get_by_name(LEGACY_TOKEN_NAME).await {
-                    if rec.revoked_at.is_some() {
-                        return unauthorized_response();
-                    }
-                    req.extensions_mut().insert(rec);
+        if let Some(ref token) = presented
+            && verify_api_token(token, expected_hash)
+        {
+            // Honor revocation of the seeded legacy-default row.
+            if let Ok(Some(rec)) = state.token_store.get_by_name(LEGACY_TOKEN_NAME).await {
+                if rec.revoked_at.is_some() {
+                    return unauthorized_response();
                 }
-                return next.run(req).await;
+                req.extensions_mut().insert(rec);
             }
+            return next.run(req).await;
         }
         return unauthorized_response();
     }

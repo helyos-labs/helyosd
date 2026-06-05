@@ -1,6 +1,7 @@
 pub mod auth;
 mod handlers;
 pub mod routes;
+pub mod tokens;
 
 use std::sync::Arc;
 
@@ -30,6 +31,7 @@ pub struct ClusterEvent {
     pub message: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn serve(
     handle: OrchestratorHandle,
     store: Arc<dyn StateStore>,

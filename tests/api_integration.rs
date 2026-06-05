@@ -817,3 +817,104 @@ async fn legacy_admin_token_still_works() {
         .expect("request failed");
     assert_eq!(resp.status(), 200, "legacy api_token_hash must still authenticate");
 }
+
+// ---------------------------------------------------------------------------
+// Token management endpoints (Task 5)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn create_use_list_revoke_token_flow() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let c = client();
+
+    // Create a token as admin.
+    let resp = c
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&serde_json::json!({ "name": "deploy-bot" }))
+        .send()
+        .await
+        .expect("create failed");
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let secret = body["token"].as_str().expect("token in body").to_string();
+    assert_eq!(body["name"], "deploy-bot");
+
+    // The new token authenticates.
+    let resp = c
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // whoami reflects identity.
+    let who: serde_json::Value = c
+        .get(server.url("/api/v1/whoami"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(who["name"], "deploy-bot");
+
+    // List shows it, and never the secret.
+    let list: serde_json::Value = c
+        .get(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let names: Vec<&str> = list.as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"deploy-bot"));
+    assert!(list.as_array().unwrap().iter().all(|t| t.get("token_hash").is_none()));
+
+    // Revoke it → 204, then it stops working.
+    let resp = c
+        .delete(server.url("/api/v1/tokens/deploy-bot"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 204);
+
+    let resp = c
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 401, "revoked token must stop authenticating");
+}
+
+#[tokio::test]
+async fn create_duplicate_name_conflicts() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let c = client();
+    let body = serde_json::json!({ "name": "dup" });
+    let first = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    assert_eq!(first.status(), 201);
+    let second = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    assert_eq!(second.status(), 409);
+}
+
+#[tokio::test]
+async fn revoke_unknown_token_is_404() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .delete(server.url("/api/v1/tokens/ghost"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 404);
+}
