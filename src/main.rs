@@ -447,10 +447,10 @@ fn resolve_api_tls(
         sans.push(a.clone());
     }
     sans.extend(cli.tls_san.iter().cloned());
-    if let Ok(hn) = hostname::get() {
-        if let Ok(s) = hn.into_string() {
-            sans.push(s);
-        }
+    if let Ok(hn) = hostname::get()
+        && let Ok(s) = hn.into_string()
+    {
+        sans.push(s);
     }
     let m = helyosd::cluster::tls::load_or_generate_http(data_dir, &sans)?;
     Ok(Some(helyosd::api::ApiTls {
@@ -506,6 +506,11 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
 
     let api_token_hash = init_api_token(cli, &store, &token_store).await?;
     let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
+    let http_ca_pem = if api_tls.is_some() {
+        std::fs::read(helyosd::cluster::tls::http_ca_path(&data_dir)).ok()
+    } else {
+        None
+    };
     if api_tls.is_some() {
         let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
         info!("HTTPS enabled. Connect the CLI with:");
@@ -523,6 +528,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         api_token_hash,
         &addr,
         api_tls,
+        http_ca_pem,
         shutdown.cancelled_owned(),
     )
     .await
@@ -737,6 +743,11 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     let api_token_hash = init_api_token(cli, &store, &token_store).await?;
     let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
+    let http_ca_pem = if api_tls.is_some() {
+        std::fs::read(helyosd::cluster::tls::http_ca_path(&data_dir)).ok()
+    } else {
+        None
+    };
     if api_tls.is_some() {
         let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
         info!("HTTPS enabled. Connect the CLI with:");
@@ -755,6 +766,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         api_token_hash,
         &addr,
         api_tls,
+        http_ca_pem,
         shutdown.cancelled_owned(),
     )
     .await

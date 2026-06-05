@@ -26,6 +26,9 @@ pub struct AppState {
     pub metrics: Arc<dyn MetricsPort>,
     pub event_tx: broadcast::Sender<ClusterEvent>,
     pub api_token_hash: Option<String>,
+    /// PEM of the HTTP API's self-signed CA, served by `GET /api/v1/ca`.
+    /// `None` when TLS is off or a BYO cert is used.
+    pub http_ca_pem: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -47,6 +50,7 @@ pub async fn serve(
     api_token_hash: Option<String>,
     addr: &str,
     api_tls: Option<ApiTls>,
+    http_ca_pem: Option<Vec<u8>>,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()> {
     let state = AppState {
@@ -56,6 +60,7 @@ pub async fn serve(
         metrics,
         event_tx,
         api_token_hash,
+        http_ca_pem,
     };
     let app = routes::build(state);
 
