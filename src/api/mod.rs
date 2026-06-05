@@ -75,7 +75,12 @@ pub async fn serve(
         Some(tls) => {
             let config =
                 axum_server::tls_rustls::RustlsConfig::from_pem(tls.cert_pem, tls.key_pem).await?;
-            let socket: std::net::SocketAddr = addr.parse()?;
+            // Resolve `addr` (accepts both "ip:port" and "hostname:port"), unlike
+            // a bare SocketAddr parse which requires a numeric IP.
+            let socket = tokio::net::lookup_host(addr)
+                .await?
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("could not resolve bind address: {addr}"))?;
             let handle = axum_server::Handle::new();
             let h2 = handle.clone();
             tokio::spawn(async move {
