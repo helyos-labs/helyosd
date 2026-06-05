@@ -109,10 +109,38 @@ struct Cli {
     /// Container runtime to use: docker, containerd, or auto
     #[arg(long, default_value = "auto")]
     runtime: String,
+
+    /// TLS mode for the HTTP API: auto (TLS for non-loopback bind), on, or off
+    #[arg(long, default_value = "auto")]
+    tls: String,
+
+    /// Path to a PEM cert for the HTTP API (BYO; overrides self-signed)
+    #[arg(long)]
+    tls_cert: Option<String>,
+
+    /// Path to the PEM private key for `--tls-cert`
+    #[arg(long)]
+    tls_key: Option<String>,
+
+    /// Extra SAN (DNS name or IP) to bake into the self-signed cert (repeatable)
+    #[arg(long = "tls-san")]
+    tls_san: Vec<String>,
+
+    /// Public address clients dial (baked into the cert SAN + the login hint)
+    #[arg(long)]
+    advertise_addr: Option<String>,
+
+    /// Allow binding a non-loopback address over plain HTTP (with --tls off)
+    #[arg(long)]
+    insecure_http: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Multiple rustls crypto providers are linked (ring + aws-lc-rs); pick one
+    // explicitly so the HTTPS server can build a TLS config without panicking.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -367,6 +395,70 @@ fn spawn_shutdown_handler() -> CancellationToken {
     token
 }
 
+// ────────────────────── TLS resolution ──────────────────────
+
+/// Decide whether the HTTP API should use TLS and, if so, return the material.
+/// `auto` → TLS unless the bind host is loopback. Enforces secure-by-default
+/// guardrails for non-loopback cleartext.
+fn resolve_api_tls(
+    cli: &Cli,
+    data_dir: &std::path::Path,
+    has_tokens: bool,
+) -> anyhow::Result<Option<helyosd::api::ApiTls>> {
+    let is_loopback = matches!(cli.host.as_str(), "127.0.0.1" | "localhost" | "::1");
+    let want_tls = match cli.tls.as_str() {
+        "on" => true,
+        "off" => false,
+        "auto" => !is_loopback,
+        other => anyhow::bail!("invalid --tls value '{other}' (expected auto|on|off)"),
+    };
+
+    if !want_tls {
+        if !is_loopback {
+            if !cli.insecure_http {
+                anyhow::bail!(
+                    "refusing to serve a non-loopback address ({}) over plain HTTP; \
+                     use --tls on, or pass BOTH --tls off and --insecure-http",
+                    cli.host
+                );
+            }
+            if !has_tokens {
+                anyhow::bail!(
+                    "refusing to expose a non-loopback address with no API token configured; \
+                     set --api-token / HELYOS_API_TOKEN first"
+                );
+            }
+        }
+        return Ok(None);
+    }
+
+    if let (Some(c), Some(k)) = (&cli.tls_cert, &cli.tls_key) {
+        return Ok(Some(helyosd::api::ApiTls {
+            cert_pem: std::fs::read(c)?,
+            key_pem: std::fs::read(k)?,
+        }));
+    }
+
+    let mut sans: Vec<String> = Vec::new();
+    if !matches!(cli.host.as_str(), "0.0.0.0" | "::") {
+        sans.push(cli.host.clone());
+    }
+    if let Some(a) = &cli.advertise_addr {
+        sans.push(a.clone());
+    }
+    sans.extend(cli.tls_san.iter().cloned());
+    if let Ok(hn) = hostname::get() {
+        if let Ok(s) = hn.into_string() {
+            sans.push(s);
+        }
+    }
+    let m = helyosd::cluster::tls::load_or_generate_http(data_dir, &sans)?;
+    Ok(Some(helyosd::api::ApiTls {
+        cert_pem: m.server_cert_pem,
+        key_pem: m.server_key_pem,
+    }))
+}
+
 // ────────────────────── single-node mode ──────────────────────
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
@@ -413,6 +505,12 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     }
 
     let api_token_hash = init_api_token(cli, &store, &token_store).await?;
+    let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
+    if api_tls.is_some() {
+        let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
+        info!("HTTPS enabled. Connect the CLI with:");
+        info!("  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>", cli.port, cli.port);
+    }
     let shutdown = spawn_shutdown_handler();
 
     let addr = format!("{}:{}", cli.host, cli.port);
@@ -424,7 +522,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         event_tx.clone(),
         api_token_hash,
         &addr,
-        None,
+        api_tls,
         shutdown.cancelled_owned(),
     )
     .await
@@ -638,6 +736,12 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     info!("heartbeat monitor started");
 
     let api_token_hash = init_api_token(cli, &store, &token_store).await?;
+    let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
+    if api_tls.is_some() {
+        let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
+        info!("HTTPS enabled. Connect the CLI with:");
+        info!("  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>", cli.port, cli.port);
+    }
     let shutdown = spawn_shutdown_handler();
 
     // Start the HTTP API (blocks until shutdown signal).
@@ -650,7 +754,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         event_tx.clone(),
         api_token_hash,
         &addr,
-        None,
+        api_tls,
         shutdown.cancelled_owned(),
     )
     .await
