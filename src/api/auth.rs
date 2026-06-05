@@ -75,37 +75,78 @@ pub fn verify_api_token(token: &str, hash: &str) -> bool {
         .is_ok()
 }
 
-/// Axum middleware that enforces Bearer token authentication.
+/// Axum middleware enforcing Bearer token auth against the multi-token store,
+/// then the legacy single-token hash.
 ///
-/// - If `state.api_token_hash` is `None`, the request passes through (no auth configured).
-/// - Otherwise, the `Authorization: Bearer <token>` header is required and verified.
+/// Resolution order:
+/// 1. Prefix-indexed lookup in `api_tokens` → single Argon2 verify; rejects
+///    expired rows; records the matched token in request extensions.
+/// 2. Legacy `cluster_config.api_token_hash` fallback (gated on the
+///    `legacy-default` row's revocation, if present).
+/// 3. If no auth material is configured at all (`api_token_hash` is `None`),
+///    the request passes through (dev/test; M3 adds a non-loopback guardrail).
 pub async fn require_bearer_token(
     State(state): State<AppState>,
-    req: Request<axum::body::Body>,
+    mut req: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let Some(ref expected_hash) = state.api_token_hash else {
-        // No auth configured — pass through.
-        return next.run(req).await;
-    };
-
-    let auth_header = req
+    let presented = req
         .headers()
         .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok());
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .map(|s| s.to_string());
 
-    let Some(header_value) = auth_header else {
+    // 1. Multi-token store: one indexed candidate, one Argon2 verify.
+    if let Some(ref token) = presented {
+        let prefix = token_prefix(token);
+        if let Ok(candidates) = state.token_store.find_active_by_prefix(&prefix).await {
+            let now = chrono::Utc::now();
+            for rec in candidates {
+                if !rec.is_expired(now) && verify_api_token(token, &rec.token_hash) {
+                    if should_touch(rec.last_used_at.as_deref(), now) {
+                        let ts = state.token_store.clone();
+                        let id = rec.id.clone();
+                        tokio::spawn(async move {
+                            let _ = ts.touch_last_used(&id).await;
+                        });
+                    }
+                    req.extensions_mut().insert(rec);
+                    return next.run(req).await;
+                }
+            }
+        }
+    }
+
+    // 2. Legacy single-token fallback.
+    if let Some(ref expected_hash) = state.api_token_hash {
+        if let Some(ref token) = presented {
+            if verify_api_token(token, expected_hash) {
+                // Honor revocation of the seeded legacy-default row.
+                if let Ok(Some(rec)) = state.token_store.get_by_name(LEGACY_TOKEN_NAME).await {
+                    if rec.revoked_at.is_some() {
+                        return unauthorized_response();
+                    }
+                    req.extensions_mut().insert(rec);
+                }
+                return next.run(req).await;
+            }
+        }
         return unauthorized_response();
-    };
+    }
 
-    let Some(token) = header_value.strip_prefix("Bearer ") else {
-        return unauthorized_response();
-    };
+    // 3. No auth configured — pass through.
+    next.run(req).await
+}
 
-    if verify_api_token(token, expected_hash) {
-        next.run(req).await
-    } else {
-        unauthorized_response()
+/// ~60s throttle for `last_used_at` writes, given the previous value.
+fn should_touch(last_used_at: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> bool {
+    match last_used_at {
+        None => true,
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(prev) => (now - prev.with_timezone(&chrono::Utc)).num_seconds() >= 60,
+            Err(_) => true,
+        },
     }
 }
 

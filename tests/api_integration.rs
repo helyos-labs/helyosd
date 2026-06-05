@@ -739,3 +739,81 @@ async fn metrics_endpoint_returns_prometheus_format() {
         "expected duration histogram in metrics output"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Multi-token auth (Task 4)
+// ---------------------------------------------------------------------------
+
+use helyosd::adapters::state::NewApiToken;
+use helyosd::api::auth::{hash_api_token, token_prefix};
+
+/// Seed an active token row directly and return the plaintext to present.
+async fn seed_token(server: &TestServer, name: &str, secret: &str) {
+    server
+        .token_store
+        .create(NewApiToken {
+            name: name.to_string(),
+            token_hash: hash_api_token(secret),
+            token_prefix: token_prefix(secret),
+            scope: "admin".to_string(),
+            expires_at: None,
+        })
+        .await
+        .expect("seed token");
+}
+
+#[tokio::test]
+async fn stored_token_authenticates() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let secret = "nxa-api_storedstoredstored";
+    seed_token(&server, "ci", secret).await;
+
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(secret)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 200, "valid stored token must be accepted");
+}
+
+#[tokio::test]
+async fn bogus_token_is_rejected() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth("nxa-api_nope")
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 401, "unknown token must be rejected");
+}
+
+#[tokio::test]
+async fn revoked_token_is_rejected() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let secret = "nxa-api_revokerevokerevoke";
+    seed_token(&server, "temp", secret).await;
+    assert!(server.token_store.revoke_by_name("temp").await.unwrap());
+
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(secret)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 401, "revoked token must be rejected");
+}
+
+#[tokio::test]
+async fn legacy_admin_token_still_works() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 200, "legacy api_token_hash must still authenticate");
+}
