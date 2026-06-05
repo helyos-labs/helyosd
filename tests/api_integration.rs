@@ -918,3 +918,17 @@ async fn revoke_unknown_token_is_404() {
         .unwrap();
     assert_eq!(resp.status(), 404);
 }
+
+#[tokio::test]
+async fn create_empty_name_is_422() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&serde_json::json!({ "name": "  " }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 422, "blank token name must be rejected");
+}
