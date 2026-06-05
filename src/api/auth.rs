@@ -11,6 +11,42 @@ use super::AppState;
 const TOKEN_PREFIX: &str = "nxa-api_";
 const TOKEN_RANDOM_BYTES: usize = 32;
 
+/// Length of the non-secret token prefix used as a DB lookup index:
+/// `"nxa-api_"` (8 chars) + 4 hex chars = 12.
+const TOKEN_PREFIX_LEN: usize = 12;
+
+/// Name of the auto-seeded row representing the pre-existing single API token,
+/// so it appears in `helyos auth token ls` and can be revoked.
+pub const LEGACY_TOKEN_NAME: &str = "legacy-default";
+
+/// Compute the non-secret lookup prefix for a token (its first 12 chars, or the
+/// whole token if shorter). Stored in `api_tokens.token_prefix` and indexed so
+/// auth needs a single Argon2 verify instead of scanning every row.
+pub fn token_prefix(token: &str) -> String {
+    token.chars().take(TOKEN_PREFIX_LEN).collect()
+}
+
+/// Seed a `legacy-default` row carrying the existing token's hash, but only if
+/// the table is empty. We only have the hash (not the plaintext) for an
+/// existing token, so the row uses a sentinel prefix and is matched via the
+/// legacy fallback in [`require_bearer_token`], not the prefix index.
+pub async fn seed_legacy_token_if_empty(
+    token_store: &std::sync::Arc<crate::adapters::state::TokenStore>,
+    hash: &str,
+) {
+    if token_store.count().await.unwrap_or(0) == 0 {
+        let _ = token_store
+            .create(crate::adapters::state::NewApiToken {
+                name: LEGACY_TOKEN_NAME.to_string(),
+                token_hash: hash.to_string(),
+                token_prefix: "legacy".to_string(),
+                scope: "admin".to_string(),
+                expires_at: None,
+            })
+            .await;
+    }
+}
+
 /// Generate a new API token: `"nxa-api_" + 64 hex chars` (32 random bytes).
 pub fn generate_api_token() -> String {
     use rand::RngCore;
@@ -140,5 +176,35 @@ mod tests {
             !verify_api_token(&token, "not-a-valid-hash"),
             "should return false for an unparseable hash"
         );
+    }
+
+    #[test]
+    fn prefix_is_first_12_chars() {
+        let token = "nxa-api_0123456789abcdef";
+        assert_eq!(token_prefix(token), "nxa-api_0123");
+        assert_eq!(token_prefix(token).len(), 12);
+    }
+
+    #[test]
+    fn prefix_handles_short_input() {
+        assert_eq!(token_prefix("abc"), "abc");
+    }
+
+    #[tokio::test]
+    async fn seed_is_idempotent() {
+        use crate::adapters::state::{SqliteStore, TokenStore};
+        let dir = tempfile::tempdir().unwrap();
+        let url = format!("sqlite:{}/s.db?mode=rwc", dir.path().display());
+        let sqlite = SqliteStore::connect(&url).await.unwrap();
+        let ts = std::sync::Arc::new(TokenStore::new(sqlite.pool()));
+
+        seed_legacy_token_if_empty(&ts, "hash-A").await;
+        assert_eq!(ts.count().await.unwrap(), 1);
+        let rec = ts.get_by_name(LEGACY_TOKEN_NAME).await.unwrap().unwrap();
+        assert_eq!(rec.token_hash, "hash-A");
+
+        // Second call must not add a second row.
+        seed_legacy_token_if_empty(&ts, "hash-B").await;
+        assert_eq!(ts.count().await.unwrap(), 1);
     }
 }

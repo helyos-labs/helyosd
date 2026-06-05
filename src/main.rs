@@ -310,27 +310,34 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
 /// - Else if a hash already exists in the store: load and return it.
 /// - Else: generate a fresh token, hash it, persist, log the token once, and
 ///   return the hash.
-async fn init_api_token(cli: &Cli, store: &Arc<dyn StateStore>) -> anyhow::Result<Option<String>> {
+async fn init_api_token(
+    cli: &Cli,
+    store: &Arc<dyn StateStore>,
+    token_store: &Arc<helyosd::adapters::state::TokenStore>,
+) -> anyhow::Result<Option<String>> {
     use helyosd::api::auth;
 
-    if let Some(ref token) = cli.api_token {
+    let hash = if let Some(ref token) = cli.api_token {
         let hash = auth::hash_api_token(token);
         store.set_cluster_config("api_token_hash", &hash).await?;
         info!("API token hash stored (token provided via CLI/env)");
-        return Ok(Some(hash));
-    }
-
-    if let Some(hash) = store.get_cluster_config("api_token_hash").await? {
+        hash
+    } else if let Some(hash) = store.get_cluster_config("api_token_hash").await? {
         info!("loaded existing API token hash from store");
-        return Ok(Some(hash));
-    }
+        hash
+    } else {
+        // No token configured and none stored — generate a new one.
+        let token = auth::generate_api_token();
+        let hash = auth::hash_api_token(&token);
+        store.set_cluster_config("api_token_hash", &hash).await?;
+        info!("Generated new API token — save this, it will not be shown again:");
+        info!("  HELYOS_API_TOKEN={token}");
+        hash
+    };
 
-    // No token configured and none stored — generate a new one.
-    let token = auth::generate_api_token();
-    let hash = auth::hash_api_token(&token);
-    store.set_cluster_config("api_token_hash", &hash).await?;
-    info!("Generated new API token — save this, it will not be shown again:");
-    info!("  HELYOS_API_TOKEN={token}");
+    // Make the pre-existing single token visible/revocable as a named row.
+    auth::seed_legacy_token_if_empty(token_store, &hash).await;
+
     Ok(Some(hash))
 }
 
@@ -405,7 +412,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         info!(email, "TLS auto-renewal enabled");
     }
 
-    let api_token_hash = init_api_token(cli, &store).await?;
+    let api_token_hash = init_api_token(cli, &store, &token_store).await?;
     let shutdown = spawn_shutdown_handler();
 
     let addr = format!("{}:{}", cli.host, cli.port);
@@ -629,7 +636,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     });
     info!("heartbeat monitor started");
 
-    let api_token_hash = init_api_token(cli, &store).await?;
+    let api_token_hash = init_api_token(cli, &store, &token_store).await?;
     let shutdown = spawn_shutdown_handler();
 
     // Start the HTTP API (blocks until shutdown signal).
