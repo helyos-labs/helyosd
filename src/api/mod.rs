@@ -12,6 +12,12 @@ use tokio::sync::broadcast;
 
 use crate::adapters::state::TokenStore;
 
+/// Optional TLS material for the HTTP API (PEM bytes).
+pub struct ApiTls {
+    pub cert_pem: Vec<u8>,
+    pub key_pem: Vec<u8>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub handle: OrchestratorHandle,
@@ -40,6 +46,7 @@ pub async fn serve(
     event_tx: broadcast::Sender<ClusterEvent>,
     api_token_hash: Option<String>,
     addr: &str,
+    api_tls: Option<ApiTls>,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()> {
     let state = AppState {
@@ -52,11 +59,45 @@ pub async fn serve(
     };
     let app = routes::build(state);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("helyosd API listening on {addr}");
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown)
-        .await?;
+    match api_tls {
+        None => {
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            tracing::info!("helyosd API listening on http://{addr}");
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown)
+                .await?;
+        }
+        Some(tls) => {
+            let config =
+                axum_server::tls_rustls::RustlsConfig::from_pem(tls.cert_pem, tls.key_pem).await?;
+            let socket: std::net::SocketAddr = addr.parse()?;
+            let handle = axum_server::Handle::new();
+            let h2 = handle.clone();
+            tokio::spawn(async move {
+                shutdown.await;
+                h2.graceful_shutdown(Some(std::time::Duration::from_secs(10)));
+            });
+            tracing::info!("helyosd API listening on https://{addr}");
+            axum_server::bind_rustls(socket, config)
+                .handle(handle)
+                .serve(app.into_make_service())
+                .await?;
+        }
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod serve_tls_tests {
+    #[tokio::test]
+    async fn rustls_config_from_generated_pem() {
+        // Install a rustls crypto provider before any TLS operation.
+        // When both aws-lc-rs and ring are in the dependency tree rustls
+        // cannot auto-select one; we pick ring (already a transitive dep).
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        let m = crate::cluster::tls::generate_ca_and_server_cert("helyos", &["127.0.0.1".into()]).unwrap();
+        let cfg = axum_server::tls_rustls::RustlsConfig::from_pem(m.server_cert_pem, m.server_key_pem).await;
+        assert!(cfg.is_ok(), "generated cert/key must load into rustls");
+    }
 }

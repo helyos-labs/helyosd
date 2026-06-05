@@ -424,6 +424,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         event_tx.clone(),
         api_token_hash,
         &addr,
+        None,
         shutdown.cancelled_owned(),
     )
     .await
@@ -649,6 +650,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         event_tx.clone(),
         api_token_hash,
         &addr,
+        None,
         shutdown.cancelled_owned(),
     )
     .await
