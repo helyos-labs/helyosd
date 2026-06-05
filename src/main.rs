@@ -132,10 +132,15 @@ async fn main() -> anyhow::Result<()> {
 // ────────────────────── shared helpers ──────────────────────
 
 /// Initialise the data directory, SQLite state store, and container runtime.
-/// Returns (data_dir, state, runtime).
+/// Returns (data_dir, state, token_store, runtime).
 async fn init_infrastructure(
     cli: &Cli,
-) -> anyhow::Result<(PathBuf, Arc<dyn StateStore>, Arc<dyn ContainerRuntime>)> {
+) -> anyhow::Result<(
+    PathBuf,
+    Arc<dyn StateStore>,
+    Arc<helyosd::adapters::state::TokenStore>,
+    Arc<dyn ContainerRuntime>,
+)> {
     use helyosd::adapters::runtime::{RuntimeDetector, RuntimeKind};
 
     std::fs::create_dir_all(&cli.data_dir)?;
@@ -144,8 +149,9 @@ async fn init_infrastructure(
 
     let db_path = format!("{}/helyos.db", cli.data_dir);
     let database_url = format!("sqlite:{}?mode=rwc", db_path);
-    let store = helyosd::adapters::state::SqliteStore::connect(&database_url).await?;
-    let store: Arc<dyn StateStore> = Arc::new(store);
+    let sqlite = helyosd::adapters::state::SqliteStore::connect(&database_url).await?;
+    let token_store = Arc::new(helyosd::adapters::state::TokenStore::new(sqlite.pool()));
+    let store: Arc<dyn StateStore> = Arc::new(sqlite);
     info!(path = db_path, "state store initialized");
 
     let kind: RuntimeKind = cli
@@ -159,7 +165,7 @@ async fn init_infrastructure(
         "container runtime initialized"
     );
 
-    Ok((data_dir, store, runtime))
+    Ok((data_dir, store, token_store, runtime))
 }
 
 /// Load or generate the master encryption key and create the encrypted secret
@@ -362,7 +368,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         cli.host, cli.port
     );
 
-    let (data_dir, store, runtime) = init_infrastructure(cli).await?;
+    let (data_dir, store, token_store, runtime) = init_infrastructure(cli).await?;
     let (secret_store, master_key) = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
@@ -406,6 +412,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     helyosd::api::serve(
         handle,
         Arc::clone(&store),
+        Arc::clone(&token_store),
         metrics,
         event_tx.clone(),
         api_token_hash,
@@ -423,7 +430,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         cli.host, cli.port, cli.grpc_port
     );
 
-    let (data_dir, store, runtime) = init_infrastructure(cli).await?;
+    let (data_dir, store, token_store, runtime) = init_infrastructure(cli).await?;
     let (secret_store, master_key) = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
@@ -630,6 +637,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     helyosd::api::serve(
         handle,
         Arc::clone(&store),
+        Arc::clone(&token_store),
         metrics,
         event_tx.clone(),
         api_token_hash,

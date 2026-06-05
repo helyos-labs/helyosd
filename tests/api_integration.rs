@@ -105,22 +105,36 @@ impl ContainerRuntime for MockRuntime {
 // TestServer
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 struct TestServer {
     base_url: String,
+    token_store: Arc<helyosd::adapters::state::TokenStore>,
     _dir: tempfile::TempDir,
 }
 
 impl TestServer {
     async fn new() -> Self {
+        Self::build(None).await
+    }
+
+    /// Like `new`, but enforces auth using `token` as a legacy admin token
+    /// (sets `api_token_hash`). Use for tests that exercise authentication.
+    #[allow(dead_code)]
+    async fn new_authed(token: &str) -> Self {
+        Self::build(Some(helyosd::api::auth::hash_api_token(token))).await
+    }
+
+    async fn build(api_token_hash: Option<String>) -> Self {
         let dir = tempfile::tempdir().expect("failed to create tempdir");
         let db_path = dir.path().join("helyosd.db");
         let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         // State store
-        let store = SqliteStore::connect(&db_url)
+        let sqlite = SqliteStore::connect(&db_url)
             .await
             .expect("failed to connect SqliteStore");
-        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(store);
+        let token_store = Arc::new(helyosd::adapters::state::TokenStore::new(sqlite.pool()));
+        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(sqlite);
 
         // Secret store (in-memory rusqlite for tests)
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
@@ -161,7 +175,8 @@ impl TestServer {
             store: store.clone(),
             metrics,
             event_tx,
-            api_token_hash: None,
+            api_token_hash,
+            token_store: token_store.clone(),
         };
         let app = routes::build(state);
 
@@ -178,6 +193,7 @@ impl TestServer {
 
         Self {
             base_url,
+            token_store,
             _dir: dir,
         }
     }
