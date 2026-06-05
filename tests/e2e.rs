@@ -18,6 +18,7 @@ use helyosd::api::{AppState, routes};
 
 struct E2eServer {
     base_url: String,
+    _token_store: Arc<helyosd::adapters::state::TokenStore>,
     _dir: tempfile::TempDir,
 }
 
@@ -28,10 +29,11 @@ impl E2eServer {
         let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         // State store
-        let store = SqliteStore::connect(&db_url)
+        let sqlite = SqliteStore::connect(&db_url)
             .await
             .expect("failed to connect SqliteStore");
-        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(store);
+        let token_store = Arc::new(helyosd::adapters::state::TokenStore::new(sqlite.pool()));
+        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(sqlite);
 
         // Secret store
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
@@ -77,6 +79,7 @@ impl E2eServer {
             metrics,
             event_tx,
             api_token_hash: None,
+            token_store: token_store.clone(),
         };
         let app = routes::build(state);
 
@@ -110,6 +113,7 @@ impl E2eServer {
 
         Self {
             base_url: base_url_clone,
+            _token_store: token_store,
             _dir: dir,
         }
     }

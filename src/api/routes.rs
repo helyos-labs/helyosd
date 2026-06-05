@@ -6,6 +6,7 @@ use tower_http::trace::TraceLayer;
 use super::AppState;
 use super::auth;
 use super::handlers;
+use super::tokens;
 
 pub fn build(state: AppState) -> Router {
     // Public routes — no auth required.
@@ -93,6 +94,11 @@ pub fn build(state: AppState) -> Router {
             "/api/v1/cluster/config/proxy",
             post(handlers::set_proxy_config),
         )
+        // API token management + identity
+        .route("/api/v1/tokens", post(tokens::create_token))
+        .route("/api/v1/tokens", get(tokens::list_tokens))
+        .route("/api/v1/tokens/{name}", delete(tokens::revoke_token))
+        .route("/api/v1/whoami", get(tokens::whoami))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_bearer_token,

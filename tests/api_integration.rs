@@ -105,22 +105,36 @@ impl ContainerRuntime for MockRuntime {
 // TestServer
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 struct TestServer {
     base_url: String,
+    token_store: Arc<helyosd::adapters::state::TokenStore>,
     _dir: tempfile::TempDir,
 }
 
 impl TestServer {
     async fn new() -> Self {
+        Self::build(None).await
+    }
+
+    /// Like `new`, but enforces auth using `token` as a legacy admin token
+    /// (sets `api_token_hash`). Use for tests that exercise authentication.
+    #[allow(dead_code)]
+    async fn new_authed(token: &str) -> Self {
+        Self::build(Some(helyosd::api::auth::hash_api_token(token))).await
+    }
+
+    async fn build(api_token_hash: Option<String>) -> Self {
         let dir = tempfile::tempdir().expect("failed to create tempdir");
         let db_path = dir.path().join("helyosd.db");
         let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         // State store
-        let store = SqliteStore::connect(&db_url)
+        let sqlite = SqliteStore::connect(&db_url)
             .await
             .expect("failed to connect SqliteStore");
-        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(store);
+        let token_store = Arc::new(helyosd::adapters::state::TokenStore::new(sqlite.pool()));
+        let store: Arc<dyn helyos_core::ports::state::StateStore> = Arc::new(sqlite);
 
         // Secret store (in-memory rusqlite for tests)
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
@@ -161,7 +175,8 @@ impl TestServer {
             store: store.clone(),
             metrics,
             event_tx,
-            api_token_hash: None,
+            api_token_hash,
+            token_store: token_store.clone(),
         };
         let app = routes::build(state);
 
@@ -178,6 +193,7 @@ impl TestServer {
 
         Self {
             base_url,
+            token_store,
             _dir: dir,
         }
     }
@@ -722,4 +738,197 @@ async fn metrics_endpoint_returns_prometheus_format() {
         body.contains("helyos_http_request_duration_seconds"),
         "expected duration histogram in metrics output"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Multi-token auth (Task 4)
+// ---------------------------------------------------------------------------
+
+use helyosd::adapters::state::NewApiToken;
+use helyosd::api::auth::{hash_api_token, token_prefix};
+
+/// Seed an active token row directly and return the plaintext to present.
+async fn seed_token(server: &TestServer, name: &str, secret: &str) {
+    server
+        .token_store
+        .create(NewApiToken {
+            name: name.to_string(),
+            token_hash: hash_api_token(secret),
+            token_prefix: token_prefix(secret),
+            scope: "admin".to_string(),
+            expires_at: None,
+        })
+        .await
+        .expect("seed token");
+}
+
+#[tokio::test]
+async fn stored_token_authenticates() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let secret = "nxa-api_storedstoredstored";
+    seed_token(&server, "ci", secret).await;
+
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(secret)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 200, "valid stored token must be accepted");
+}
+
+#[tokio::test]
+async fn bogus_token_is_rejected() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth("nxa-api_nope")
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 401, "unknown token must be rejected");
+}
+
+#[tokio::test]
+async fn revoked_token_is_rejected() {
+    let server = TestServer::new_authed("nxa-api_adminadminadmin").await;
+    let secret = "nxa-api_revokerevokerevoke";
+    seed_token(&server, "temp", secret).await;
+    assert!(server.token_store.revoke_by_name("temp").await.unwrap());
+
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(secret)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 401, "revoked token must be rejected");
+}
+
+#[tokio::test]
+async fn legacy_admin_token_still_works() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .expect("request failed");
+    assert_eq!(resp.status(), 200, "legacy api_token_hash must still authenticate");
+}
+
+// ---------------------------------------------------------------------------
+// Token management endpoints (Task 5)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn create_use_list_revoke_token_flow() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let c = client();
+
+    // Create a token as admin.
+    let resp = c
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&serde_json::json!({ "name": "deploy-bot" }))
+        .send()
+        .await
+        .expect("create failed");
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let secret = body["token"].as_str().expect("token in body").to_string();
+    assert_eq!(body["name"], "deploy-bot");
+
+    // The new token authenticates.
+    let resp = c
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // whoami reflects identity.
+    let who: serde_json::Value = c
+        .get(server.url("/api/v1/whoami"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(who["name"], "deploy-bot");
+
+    // List shows it, and never the secret.
+    let list: serde_json::Value = c
+        .get(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let names: Vec<&str> = list.as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"deploy-bot"));
+    assert!(list.as_array().unwrap().iter().all(|t| t.get("token_hash").is_none()));
+
+    // Revoke it → 204, then it stops working.
+    let resp = c
+        .delete(server.url("/api/v1/tokens/deploy-bot"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 204);
+
+    let resp = c
+        .get(server.url("/api/v1/projects"))
+        .bearer_auth(&secret)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 401, "revoked token must stop authenticating");
+}
+
+#[tokio::test]
+async fn create_duplicate_name_conflicts() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let c = client();
+    let body = serde_json::json!({ "name": "dup" });
+    let first = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    assert_eq!(first.status(), 201);
+    let second = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    assert_eq!(second.status(), 409);
+}
+
+#[tokio::test]
+async fn revoke_unknown_token_is_404() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .delete(server.url("/api/v1/tokens/ghost"))
+        .bearer_auth(admin)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 404);
+}
+
+#[tokio::test]
+async fn create_empty_name_is_422() {
+    let admin = "nxa-api_adminadminadmin";
+    let server = TestServer::new_authed(admin).await;
+    let resp = client()
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&serde_json::json!({ "name": "  " }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 422, "blank token name must be rejected");
 }

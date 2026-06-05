@@ -1,6 +1,7 @@
 pub mod auth;
 mod handlers;
 pub mod routes;
+pub mod tokens;
 
 use std::sync::Arc;
 
@@ -9,10 +10,13 @@ use helyos_core::ports::metrics::MetricsPort;
 use helyos_core::ports::state::StateStore;
 use tokio::sync::broadcast;
 
+use crate::adapters::state::TokenStore;
+
 #[derive(Clone)]
 pub struct AppState {
     pub handle: OrchestratorHandle,
     pub store: Arc<dyn StateStore>,
+    pub token_store: Arc<TokenStore>,
     pub metrics: Arc<dyn MetricsPort>,
     pub event_tx: broadcast::Sender<ClusterEvent>,
     pub api_token_hash: Option<String>,
@@ -27,9 +31,11 @@ pub struct ClusterEvent {
     pub message: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn serve(
     handle: OrchestratorHandle,
     store: Arc<dyn StateStore>,
+    token_store: Arc<TokenStore>,
     metrics: Arc<dyn MetricsPort>,
     event_tx: broadcast::Sender<ClusterEvent>,
     api_token_hash: Option<String>,
@@ -39,6 +45,7 @@ pub async fn serve(
     let state = AppState {
         handle,
         store,
+        token_store,
         metrics,
         event_tx,
         api_token_hash,
