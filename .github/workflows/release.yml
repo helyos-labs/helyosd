@@ -33,7 +33,7 @@ jobs:
             os: macos-latest
             binary_suffix: darwin-arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install protoc
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -74,7 +74,7 @@ jobs:
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@v0
         with:
