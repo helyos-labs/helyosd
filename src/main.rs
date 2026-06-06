@@ -338,21 +338,26 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
 /// - Else if a hash already exists in the store: load and return it.
 /// - Else: generate a fresh token, hash it, persist, log the token once, and
 ///   return the hash.
+///
+/// Returns `(api_token_hash, plaintext_token)`. The plaintext is `Some` only when
+/// we actually know it this run — i.e. it was provided via `--api-token`/env or
+/// freshly generated — and `None` when only the stored hash was loaded. Callers
+/// use the plaintext to seed a ready-to-use local CLI context on first start.
 async fn init_api_token(
     cli: &Cli,
     store: &Arc<dyn StateStore>,
     token_store: &Arc<helyosd::adapters::state::TokenStore>,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<(Option<String>, Option<String>)> {
     use helyosd::api::auth;
 
-    let hash = if let Some(ref token) = cli.api_token {
+    let (hash, plaintext) = if let Some(ref token) = cli.api_token {
         let hash = auth::hash_api_token(token);
         store.set_cluster_config("api_token_hash", &hash).await?;
         info!("API token hash stored (token provided via CLI/env)");
-        hash
+        (hash, Some(token.clone()))
     } else if let Some(hash) = store.get_cluster_config("api_token_hash").await? {
         info!("loaded existing API token hash from store");
-        hash
+        (hash, None)
     } else {
         // No token configured and none stored — generate a new one.
         let token = auth::generate_api_token();
@@ -360,13 +365,62 @@ async fn init_api_token(
         store.set_cluster_config("api_token_hash", &hash).await?;
         info!("Generated new API token — save this, it will not be shown again:");
         info!("  HELYOS_API_TOKEN={token}");
-        hash
+        (hash, Some(token))
     };
 
     // Make the pre-existing single token visible/revocable as a named row.
     auth::seed_legacy_token_if_empty(token_store, &hash).await;
 
-    Ok(Some(hash))
+    Ok((Some(hash), plaintext))
+}
+
+/// On first start, write a ready-to-use CLI context to `~/.helyos/config.toml`
+/// (or `$HELYOS_CONFIG`) so `helyos` works locally without fishing the generated
+/// token out of the daemon log. Writes ONLY when the config file does not exist,
+/// so an operator's existing contexts are never clobbered.
+fn write_default_local_context(cli: &Cli, tls: bool, ca_pem: Option<&[u8]>, token: &str) {
+    use base64::Engine;
+
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
+    let default_dir = std::path::PathBuf::from(&home).join(".helyos");
+    let path = std::env::var_os("HELYOS_CONFIG")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| default_dir.join("config.toml"));
+    if path.exists() {
+        return; // never overwrite an existing CLI config
+    }
+
+    let scheme = if tls { "https" } else { "http" };
+    let server = format!("{scheme}://localhost:{}", cli.port);
+    let mut out =
+        String::from("# Managed by `helyos`. Edit with `helyos context` / `helyos login`.\n");
+    out.push_str("current-context = \"local\"\n\n[context.local]\n");
+    out.push_str(&format!("server = \"{server}\"\n"));
+    out.push_str(&format!("token = \"{token}\"\n"));
+    out.push_str("project = \"default\"\n");
+    if let Some(pem) = ca_pem {
+        out.push_str(&format!(
+            "ca = \"{}\"\n",
+            base64::engine::general_purpose::STANDARD.encode(pem)
+        ));
+    }
+
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if std::fs::write(&path, out.as_bytes()).is_ok() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+        info!(
+            "wrote local CLI context to {} — `helyos status` works out of the box",
+            path.display()
+        );
+    }
 }
 
 /// Create a cancellation token and spawn a task that cancels it on SIGINT or
@@ -504,13 +558,16 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         info!(email, "TLS auto-renewal enabled");
     }
 
-    let api_token_hash = init_api_token(cli, &store, &token_store).await?;
+    let (api_token_hash, new_token) = init_api_token(cli, &store, &token_store).await?;
     let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
     let http_ca_pem = if api_tls.is_some() {
         std::fs::read(helyosd::cluster::tls::http_ca_path(&data_dir)).ok()
     } else {
         None
     };
+    if let Some(ref token) = new_token {
+        write_default_local_context(cli, api_tls.is_some(), http_ca_pem.as_deref(), token);
+    }
     if api_tls.is_some() {
         let dial = cli
             .advertise_addr
@@ -747,13 +804,16 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     });
     info!("heartbeat monitor started");
 
-    let api_token_hash = init_api_token(cli, &store, &token_store).await?;
+    let (api_token_hash, new_token) = init_api_token(cli, &store, &token_store).await?;
     let api_tls = resolve_api_tls(cli, &data_dir, api_token_hash.is_some())?;
     let http_ca_pem = if api_tls.is_some() {
         std::fs::read(helyosd::cluster::tls::http_ca_path(&data_dir)).ok()
     } else {
         None
     };
+    if let Some(ref token) = new_token {
+        write_default_local_context(cli, api_tls.is_some(), http_ca_pem.as_deref(), token);
+    }
     if api_tls.is_some() {
         let dial = cli
             .advertise_addr
