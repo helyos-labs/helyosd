@@ -816,7 +816,11 @@ async fn legacy_admin_token_still_works() {
         .send()
         .await
         .expect("request failed");
-    assert_eq!(resp.status(), 200, "legacy api_token_hash must still authenticate");
+    assert_eq!(
+        resp.status(),
+        200,
+        "legacy api_token_hash must still authenticate"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -873,9 +877,19 @@ async fn create_use_list_revoke_token_flow() {
         .json()
         .await
         .unwrap();
-    let names: Vec<&str> = list.as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    let names: Vec<&str> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
     assert!(names.contains(&"deploy-bot"));
-    assert!(list.as_array().unwrap().iter().all(|t| t.get("token_hash").is_none()));
+    assert!(
+        list.as_array()
+            .unwrap()
+            .iter()
+            .all(|t| t.get("token_hash").is_none())
+    );
 
     // Revoke it → 204, then it stops working.
     let resp = c
@@ -901,9 +915,21 @@ async fn create_duplicate_name_conflicts() {
     let server = TestServer::new_authed(admin).await;
     let c = client();
     let body = serde_json::json!({ "name": "dup" });
-    let first = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    let first = c
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(first.status(), 201);
-    let second = c.post(server.url("/api/v1/tokens")).bearer_auth(admin).json(&body).send().await.unwrap();
+    let second = c
+        .post(server.url("/api/v1/tokens"))
+        .bearer_auth(admin)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(second.status(), 409);
 }
 
@@ -937,7 +963,11 @@ async fn create_empty_name_is_422() {
 #[tokio::test]
 async fn version_is_public() {
     let server = TestServer::new().await;
-    let resp = client().get(server.url("/api/v1/version")).send().await.unwrap();
+    let resp = client()
+        .get(server.url("/api/v1/version"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 200);
     let v: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(v["api"], "v1");

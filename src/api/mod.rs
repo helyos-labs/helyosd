@@ -106,8 +106,11 @@ mod serve_tls_tests {
         // cannot auto-select one; we pick ring (already a transitive dep).
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        let m = crate::cluster::tls::generate_ca_and_server_cert("helyos", &["127.0.0.1".into()]).unwrap();
-        let cfg = axum_server::tls_rustls::RustlsConfig::from_pem(m.server_cert_pem, m.server_key_pem).await;
+        let m = crate::cluster::tls::generate_ca_and_server_cert("helyos", &["127.0.0.1".into()])
+            .unwrap();
+        let cfg =
+            axum_server::tls_rustls::RustlsConfig::from_pem(m.server_cert_pem, m.server_key_pem)
+                .await;
         assert!(cfg.is_ok(), "generated cert/key must load into rustls");
     }
 }

@@ -512,9 +512,15 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         None
     };
     if api_tls.is_some() {
-        let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
+        let dial = cli
+            .advertise_addr
+            .clone()
+            .unwrap_or_else(|| cli.host.clone());
         info!("HTTPS enabled. Connect the CLI with:");
-        info!("  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>", cli.port, cli.port);
+        info!(
+            "  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>",
+            cli.port, cli.port
+        );
     }
     let shutdown = spawn_shutdown_handler();
 
@@ -749,9 +755,15 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         None
     };
     if api_tls.is_some() {
-        let dial = cli.advertise_addr.clone().unwrap_or_else(|| cli.host.clone());
+        let dial = cli
+            .advertise_addr
+            .clone()
+            .unwrap_or_else(|| cli.host.clone());
         info!("HTTPS enabled. Connect the CLI with:");
-        info!("  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>", cli.port, cli.port);
+        info!(
+            "  helyos login https://{dial}:{} --ca-fingerprint <see: curl -k https://{dial}:{}/api/v1/ca>",
+            cli.port, cli.port
+        );
     }
     let shutdown = spawn_shutdown_handler();
 

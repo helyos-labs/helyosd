@@ -205,10 +205,16 @@ mod tests {
 
         assert!(ts.revoke_by_name("ci").await.unwrap());
         assert!(
-            ts.find_active_by_prefix("nxa-api_abcd").await.unwrap().is_empty(),
+            ts.find_active_by_prefix("nxa-api_abcd")
+                .await
+                .unwrap()
+                .is_empty(),
             "revoked rows must not be returned as active candidates"
         );
-        assert!(!ts.revoke_by_name("ci").await.unwrap(), "second revoke is a no-op");
+        assert!(
+            !ts.revoke_by_name("ci").await.unwrap(),
+            "second revoke is a no-op"
+        );
     }
 
     #[tokio::test]
@@ -223,10 +229,15 @@ mod tests {
     async fn expiry_check() {
         let past = (Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
         let mut rec = ApiTokenRecord {
-            id: "i".into(), name: "n".into(), token_hash: "h".into(),
-            token_prefix: "p".into(), scope: "admin".into(),
-            created_at: Utc::now().to_rfc3339(), expires_at: Some(past),
-            last_used_at: None, revoked_at: None,
+            id: "i".into(),
+            name: "n".into(),
+            token_hash: "h".into(),
+            token_prefix: "p".into(),
+            scope: "admin".into(),
+            created_at: Utc::now().to_rfc3339(),
+            expires_at: Some(past),
+            last_used_at: None,
+            revoked_at: None,
         };
         assert!(rec.is_expired(Utc::now()));
         rec.expires_at = None;

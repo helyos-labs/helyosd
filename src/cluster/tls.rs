@@ -90,7 +90,10 @@ pub struct CertMaterial {
 /// Generate a self-signed CA and a server certificate signed by it. The server
 /// cert's SANs always include `localhost`, `127.0.0.1`, and `common_name`, plus
 /// every entry in `san_hosts` (each parsed as an IP if possible, else a DNS name).
-pub fn generate_ca_and_server_cert(common_name: &str, san_hosts: &[String]) -> Result<CertMaterial> {
+pub fn generate_ca_and_server_cert(
+    common_name: &str,
+    san_hosts: &[String],
+) -> Result<CertMaterial> {
     use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, KeyPair, SanType};
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -203,12 +206,19 @@ mod tests {
 
     #[test]
     fn generates_ca_and_server_cert_with_sans() {
-        let m = generate_ca_and_server_cert("helyos", &["example.internal".into(), "10.0.0.5".into()])
-            .expect("generate");
-        assert!(!m.ca_pem.is_empty() && !m.server_cert_pem.is_empty() && !m.server_key_pem.is_empty());
+        let m =
+            generate_ca_and_server_cert("helyos", &["example.internal".into(), "10.0.0.5".into()])
+                .expect("generate");
+        assert!(
+            !m.ca_pem.is_empty() && !m.server_cert_pem.is_empty() && !m.server_key_pem.is_empty()
+        );
         let ca = String::from_utf8(m.ca_pem.clone()).unwrap();
         assert!(ca.contains("BEGIN CERTIFICATE"));
-        assert!(String::from_utf8(m.server_key_pem).unwrap().contains("PRIVATE KEY"));
+        assert!(
+            String::from_utf8(m.server_key_pem)
+                .unwrap()
+                .contains("PRIVATE KEY")
+        );
     }
 
     #[test]
