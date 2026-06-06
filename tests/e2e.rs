@@ -80,6 +80,7 @@ impl E2eServer {
             event_tx,
             api_token_hash: None,
             token_store: token_store.clone(),
+            http_ca_pem: None,
         };
         let app = routes::build(state);
 

@@ -108,6 +108,39 @@ pub async fn revoke_token(
     }
 }
 
+/// GET /api/v1/version — unauthenticated reachability/TLS probe.
+pub async fn version() -> impl IntoResponse {
+    Json(serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "api": "v1" }))
+}
+
+/// GET /api/v1/ca — unauthenticated. Returns the HTTP self-signed CA PEM and its
+/// SHA-256 fingerprint so a client can pin trust.
+pub async fn ca_cert(State(state): AppStateExtractor) -> impl IntoResponse {
+    match &state.http_ca_pem {
+        Some(pem) => {
+            use sha2::{Digest, Sha256};
+            let digest = Sha256::digest(pem);
+            let hexed = hex::encode(digest);
+            let pretty = hexed
+                .as_bytes()
+                .chunks(2)
+                .map(|c| std::str::from_utf8(c).unwrap())
+                .collect::<Vec<_>>()
+                .join(":");
+            Json(serde_json::json!({
+                "pem": String::from_utf8_lossy(pem),
+                "sha256": pretty,
+            }))
+            .into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "no self-signed CA (TLS off or BYO cert)" })),
+        )
+            .into_response(),
+    }
+}
+
 /// GET /api/v1/whoami — identity of the calling token.
 pub async fn whoami(req: Request) -> impl IntoResponse {
     if let Some(rec) = req.extensions().get::<ApiTokenRecord>() {

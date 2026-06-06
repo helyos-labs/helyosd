@@ -12,7 +12,9 @@ pub fn build(state: AppState) -> Router {
     // Public routes — no auth required.
     let public = Router::new()
         .route("/health", get(handlers::health))
-        .route("/metrics", get(handlers::metrics_endpoint));
+        .route("/metrics", get(handlers::metrics_endpoint))
+        .route("/api/v1/version", get(tokens::version))
+        .route("/api/v1/ca", get(tokens::ca_cert));
 
     // Protected routes — require Bearer token when configured.
     let protected = Router::new()

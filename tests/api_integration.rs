@@ -177,6 +177,7 @@ impl TestServer {
             event_tx,
             api_token_hash,
             token_store: token_store.clone(),
+            http_ca_pem: None,
         };
         let app = routes::build(state);
 
@@ -931,4 +932,21 @@ async fn create_empty_name_is_422() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 422, "blank token name must be rejected");
+}
+
+#[tokio::test]
+async fn version_is_public() {
+    let server = TestServer::new().await;
+    let resp = client().get(server.url("/api/v1/version")).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let v: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(v["api"], "v1");
+    assert!(v["version"].is_string());
+}
+
+#[tokio::test]
+async fn ca_is_404_without_tls() {
+    let server = TestServer::new().await; // harness sets http_ca_pem: None
+    let resp = client().get(server.url("/api/v1/ca")).send().await.unwrap();
+    assert_eq!(resp.status(), 404);
 }
