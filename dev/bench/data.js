@@ -1,6 +1,6 @@
 window.BENCHMARK_DATA = {
   "lastUpdate": 1780348732857,
-  "repoUrl": "https://github.com/nexa-net/nexad",
+  "repoUrl": "https://github.com/helyos-labs/helyosd",
   "entries": {
     "Benchmark": [
       {
@@ -20,7 +20,7 @@ window.BENCHMARK_DATA = {
           "message": "fix: add command field to ContainerConfig, fix runtime integration test",
           "timestamp": "2026-05-23T00:07:22+02:00",
           "tree_id": "bb1d51c1d28bef77f77f760dec6349d8f7c53b7c",
-          "url": "https://github.com/nexa-net/nexad/commit/318faab7525b79ba41421272918706421ccc2671"
+          "url": "https://github.com/helyos-labs/helyosd/commit/318faab7525b79ba41421272918706421ccc2671"
         },
         "date": 1779488032087,
         "tool": "cargo",
@@ -116,7 +116,7 @@ window.BENCHMARK_DATA = {
           "message": "style: fix clippy warnings — add Default impl, allow too_many_arguments",
           "timestamp": "2026-05-24T22:36:51+02:00",
           "tree_id": "eaccdc5f91d783b96bd9358203aa3f370b062852",
-          "url": "https://github.com/nexa-net/nexad/commit/464fdb4f460e772a7926329667e3da4824eb7426"
+          "url": "https://github.com/helyos-labs/helyosd/commit/464fdb4f460e772a7926329667e3da4824eb7426"
         },
         "date": 1779655367171,
         "tool": "cargo",
@@ -212,7 +212,7 @@ window.BENCHMARK_DATA = {
           "message": "style: fix rustfmt for edition 2024 style (import order, line wrapping)",
           "timestamp": "2026-05-24T23:22:14+02:00",
           "tree_id": "e2e2e12040bb56a0625c77d7276af12bebd0f0f7",
-          "url": "https://github.com/nexa-net/nexad/commit/b8effdb6b56e5a64f179b8ae31b9fa9356aeab5f"
+          "url": "https://github.com/helyos-labs/helyosd/commit/b8effdb6b56e5a64f179b8ae31b9fa9356aeab5f"
         },
         "date": 1779658070493,
         "tool": "cargo",
@@ -308,7 +308,7 @@ window.BENCHMARK_DATA = {
           "message": "ci: add Cross.toml to install protoc for aarch64-linux cross builds",
           "timestamp": "2026-05-25T01:15:42+02:00",
           "tree_id": "0f7279589f0da267fd01b2d186d8d77267996ac8",
-          "url": "https://github.com/nexa-net/nexad/commit/21f49aa07d36870c407a76023abab0c92f6c7c5b"
+          "url": "https://github.com/helyos-labs/helyosd/commit/21f49aa07d36870c407a76023abab0c92f6c7c5b"
         },
         "date": 1779664792413,
         "tool": "cargo",
@@ -404,7 +404,7 @@ window.BENCHMARK_DATA = {
           "message": "ci: fix release workflow — fail-fast false, pre-build protoc for cross",
           "timestamp": "2026-05-25T01:25:36+02:00",
           "tree_id": "b25f5d75be4ddb54359d3e96f64ccc99566974af",
-          "url": "https://github.com/nexa-net/nexad/commit/92ef1ab4e017cb720d23e513bede9260ef3a3d4d"
+          "url": "https://github.com/helyos-labs/helyosd/commit/92ef1ab4e017cb720d23e513bede9260ef3a3d4d"
         },
         "date": 1779665404320,
         "tool": "cargo",
@@ -500,7 +500,7 @@ window.BENCHMARK_DATA = {
           "message": "fix: default data-dir to ~/.nexa/data instead of /var/lib/nexa\n\nAvoids permission errors when running without sudo.",
           "timestamp": "2026-05-25T11:53:58+02:00",
           "tree_id": "6002b14ded8e2d93566aa9142dce08ecf4efbe2a",
-          "url": "https://github.com/nexa-net/nexad/commit/1157979bfa76e3612718e37b21e3d4515695b4f8"
+          "url": "https://github.com/helyos-labs/helyosd/commit/1157979bfa76e3612718e37b21e3d4515695b4f8"
         },
         "date": 1779703123068,
         "tool": "cargo",
@@ -596,7 +596,7 @@ window.BENCHMARK_DATA = {
           "message": "style(nexad): cargo fmt",
           "timestamp": "2026-05-25T16:24:31+02:00",
           "tree_id": "962bbb9fae57f99daddcd8d061df8cbf8c23e9f9",
-          "url": "https://github.com/nexa-net/nexad/commit/6e6fe9d123c065a403311ff5a08384e3eb7e2273"
+          "url": "https://github.com/helyos-labs/helyosd/commit/6e6fe9d123c065a403311ff5a08384e3eb7e2273"
         },
         "date": 1779719980366,
         "tool": "cargo",
@@ -692,7 +692,7 @@ window.BENCHMARK_DATA = {
           "message": "release: bump to v0.2.0 and add auto-release workflow",
           "timestamp": "2026-05-25T16:44:37+02:00",
           "tree_id": "72afeb613f41c08116c1ecc0426835f29e11b89e",
-          "url": "https://github.com/nexa-net/nexad/commit/c47981dea85e0101113b9c62708bf84d2fa80980"
+          "url": "https://github.com/helyos-labs/helyosd/commit/c47981dea85e0101113b9c62708bf84d2fa80980"
         },
         "date": 1779720769198,
         "tool": "cargo",
@@ -788,7 +788,7 @@ window.BENCHMARK_DATA = {
           "message": "ci: auto-release builds and publishes directly on version bump",
           "timestamp": "2026-05-25T16:51:27+02:00",
           "tree_id": "338969e7d89922dc3ff73d3bd91441142e261938",
-          "url": "https://github.com/nexa-net/nexad/commit/2a79d3d6a531fbf183be651e8103bba2eeafe8df"
+          "url": "https://github.com/helyos-labs/helyosd/commit/2a79d3d6a531fbf183be651e8103bba2eeafe8df"
         },
         "date": 1779720942981,
         "tool": "cargo",
@@ -884,7 +884,7 @@ window.BENCHMARK_DATA = {
           "message": "refactor: remove nexa-proxy backend, default to traefik\n\nnexa-proxy crate has been removed in favor of established reverse\nproxies. Traefik is now the default proxy backend, with Nginx and\nCaddy as alternatives.",
           "timestamp": "2026-06-01T11:01:48+02:00",
           "tree_id": "df3e871cccca455c90caf07730e253ac8ec6a528",
-          "url": "https://github.com/nexa-net/nexad/commit/06007454ac4bdc6203710fadadc57774af45e795"
+          "url": "https://github.com/helyos-labs/helyosd/commit/06007454ac4bdc6203710fadadc57774af45e795"
         },
         "date": 1780304952056,
         "tool": "cargo",
@@ -980,7 +980,7 @@ window.BENCHMARK_DATA = {
           "message": "ci: publish SHA-256 checksums with release artifacts\n\nGenerate sha256sums.txt in the release job and upload alongside tarballs\nso install.sh can verify binary integrity.",
           "timestamp": "2026-06-01T11:46:57+02:00",
           "tree_id": "b852bda5ec2e5f2ccf908341f8601786992aca18",
-          "url": "https://github.com/nexa-net/nexad/commit/d53ded438857d1c61fe25b7a2c5b2b0b1b41d6df"
+          "url": "https://github.com/helyos-labs/helyosd/commit/d53ded438857d1c61fe25b7a2c5b2b0b1b41d6df"
         },
         "date": 1780307710521,
         "tool": "cargo",
@@ -1076,7 +1076,7 @@ window.BENCHMARK_DATA = {
           "message": "deps: bump nexa-core to v0.1.2 (parking_lot + serde_yml)",
           "timestamp": "2026-06-01T16:28:18+02:00",
           "tree_id": "d60342c7a95d60e3a838cd2b4852631c60dde1a2",
-          "url": "https://github.com/nexa-net/nexad/commit/a3c42193824078a5ac44f43bc9a49b4aa5702344"
+          "url": "https://github.com/helyos-labs/helyosd/commit/a3c42193824078a5ac44f43bc9a49b4aa5702344"
         },
         "date": 1780324702644,
         "tool": "cargo",
@@ -1172,7 +1172,7 @@ window.BENCHMARK_DATA = {
           "message": "ci: add macOS to test matrix",
           "timestamp": "2026-06-01T23:05:20+02:00",
           "tree_id": "bba9a717f4371172a90b108388eb7da2be43ef15",
-          "url": "https://github.com/nexa-net/nexad/commit/94f9254ac31c6e57c598281ff354ba9edeb37835"
+          "url": "https://github.com/helyos-labs/helyosd/commit/94f9254ac31c6e57c598281ff354ba9edeb37835"
         },
         "date": 1780348623813,
         "tool": "cargo",
@@ -1268,7 +1268,7 @@ window.BENCHMARK_DATA = {
           "message": "deps: bump nexa-core to v0.1.3",
           "timestamp": "2026-06-01T23:12:02+02:00",
           "tree_id": "bf04f2c25654f5486762346f1e4460d7cdaf0bb6",
-          "url": "https://github.com/nexa-net/nexad/commit/48523f6a6a7864149807fda808a4404fc012b1d0"
+          "url": "https://github.com/helyos-labs/helyosd/commit/48523f6a6a7864149807fda808a4404fc012b1d0"
         },
         "date": 1780348732068,
         "tool": "cargo",
