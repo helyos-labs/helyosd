@@ -114,8 +114,13 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Generate checksums
+        run: sha256sum *.tar.gz > sha256sums.txt
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.version }}
-          files: '*.tar.gz'
+          files: |
+            *.tar.gz
+            sha256sums.txt
           generate_release_notes: true
