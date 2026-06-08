@@ -261,6 +261,7 @@ fn spawn_orchestrator(
     master_ip: Option<String>,
     proxy: Option<Arc<dyn helyos_core::ports::proxy::ProxyBackend>>,
     route_store: Option<Arc<dyn helyos_core::ports::route_store::RouteStore>>,
+    acme_email: Option<String>,
     metrics: Option<Arc<dyn MetricsPort>>,
     event_tx: tokio::sync::broadcast::Sender<helyosd::api::ClusterEvent>,
 ) -> helyos_core::domain::orchestrator::OrchestratorHandle {
@@ -276,6 +277,7 @@ fn spawn_orchestrator(
         master_ip,
         proxy,
         route_store,
+        acme_email,
         metrics.clone(),
     );
 
@@ -538,6 +540,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         master_ip,
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
+        cli.acme_email.clone(),
         Some(metrics.clone()),
         event_tx.clone(),
     );
@@ -622,6 +625,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         master_ip,
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
+        cli.acme_email.clone(),
         Some(metrics.clone()),
         event_tx.clone(),
     );

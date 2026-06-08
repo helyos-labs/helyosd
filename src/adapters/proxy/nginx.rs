@@ -145,12 +145,14 @@ impl ProxyBackend for NginxBackend {
         for route in routes {
             let path = self.conf_path(&route.domain);
             let content = Self::render_config(route);
-            tokio::fs::write(&path, &content).await.map_err(|e| {
-                HelyosError::Proxy(format!(
-                    "failed to write nginx config {}: {e}",
-                    path.display()
-                ))
-            })?;
+            super::atomic_write(&path, content.as_bytes())
+                .await
+                .map_err(|e| {
+                    HelyosError::Proxy(format!(
+                        "failed to write nginx config {}: {e}",
+                        path.display()
+                    ))
+                })?;
             info!(domain = %route.domain, path = %path.display(), "wrote nginx config");
         }
         Ok(())

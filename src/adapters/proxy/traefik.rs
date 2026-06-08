@@ -139,7 +139,7 @@ impl ProxyBackend for TraefikBackend {
         let yaml = serde_yaml_ng::to_string(&config)
             .map_err(|e| HelyosError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
-        tokio::fs::write(&self.config_path, &yaml)
+        super::atomic_write(&self.config_path, yaml.as_bytes())
             .await
             .map_err(|e| {
                 HelyosError::Proxy(format!(
@@ -177,7 +177,7 @@ impl ProxyBackend for TraefikBackend {
         let yaml = serde_yaml_ng::to_string(&config)
             .map_err(|e| HelyosError::Proxy(format!("failed to serialize traefik config: {e}")))?;
 
-        tokio::fs::write(&self.config_path, &yaml)
+        super::atomic_write(&self.config_path, yaml.as_bytes())
             .await
             .map_err(|e| HelyosError::Proxy(format!("failed to rewrite traefik config: {e}")))?;
         info!(domain, "removed route from traefik config");

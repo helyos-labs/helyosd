@@ -72,13 +72,19 @@ impl ContainerRuntime for DockerRuntime {
         for port in &config.ports {
             let key = format!("{}/tcp", port.container_port);
             exposed_ports.insert(key.clone(), HashMap::new());
-            port_bindings.insert(
-                key,
-                Some(vec![BollardPortBinding {
-                    host_ip: Some("0.0.0.0".to_string()),
-                    host_port: port.host_port.map(|p| p.to_string()),
-                }]),
-            );
+            // Only publish to the host when a host port is requested. Ports without one
+            // (e.g. a public deployment reached through the reverse proxy) are exposed on
+            // the container network only, not bound on the host — otherwise Docker would
+            // publish them on a random host port.
+            if let Some(host_port) = port.host_port {
+                port_bindings.insert(
+                    key,
+                    Some(vec![BollardPortBinding {
+                        host_ip: Some("0.0.0.0".to_string()),
+                        host_port: Some(host_port.to_string()),
+                    }]),
+                );
+            }
         }
         let binds: Vec<String> = config
             .volumes

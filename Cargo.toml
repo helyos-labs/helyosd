@@ -1,7 +1,7 @@
 [package]
 name = "helyosd"
 description = "Helyos daemon — container orchestration engine"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/helyos-labs/helyosd"
@@ -16,7 +16,7 @@ name = "helyosd"
 path = "src/main.rs"
 
 [dependencies]
-helyos-core = { git = "https://github.com/helyos-labs/helyos-core", tag = "v0.1.7" }
+helyos-core = { git = "https://github.com/helyos-labs/helyos-core", tag = "v0.1.8" }
 # default-features=false drops the `protobuf` exposition format (and its
 # vulnerable protobuf 2.x dep, RUSTSEC-2024-0437); we only use TextEncoder.
 prometheus = { version = "0.13", default-features = false }
