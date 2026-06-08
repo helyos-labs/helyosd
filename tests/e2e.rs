@@ -69,6 +69,7 @@ impl E2eServer {
             None,
             Some(route_store),
             None,
+            None,
         );
 
         // Build axum app

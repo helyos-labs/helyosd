@@ -166,6 +166,7 @@ impl TestServer {
             None,
             Some(route_store),
             None,
+            None,
         );
 
         // Build axum app

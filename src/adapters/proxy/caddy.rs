@@ -68,7 +68,7 @@ impl CaddyBackend {
 impl ProxyBackend for CaddyBackend {
     async fn apply_routes(&self, routes: &[RouteConfig]) -> Result<()> {
         let content = Self::render_caddyfile(routes);
-        tokio::fs::write(&self.caddyfile_path, &content)
+        super::atomic_write(&self.caddyfile_path, content.as_bytes())
             .await
             .map_err(|e| {
                 HelyosError::Proxy(format!(
@@ -142,7 +142,7 @@ impl ProxyBackend for CaddyBackend {
             format!("{trimmed}\n")
         };
 
-        tokio::fs::write(&self.caddyfile_path, &final_content)
+        super::atomic_write(&self.caddyfile_path, final_content.as_bytes())
             .await
             .map_err(|e| HelyosError::Proxy(format!("failed to rewrite Caddyfile: {e}")))?;
         info!(domain, "removed route from Caddyfile");
