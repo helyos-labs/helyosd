@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794839884878,
+  "lastUpdate": 1795454009389,
   "repoUrl": "https://github.com/helyos-labs/helyosd",
   "entries": {
     "Benchmark": [
@@ -3411,6 +3411,100 @@ window.BENCHMARK_DATA = {
             "name": "list_pods/1000",
             "value": 4633448,
             "range": "± 734592",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "NA2SIME",
+            "username": "na2sime",
+            "email": "54268491+na2sime@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "3b284ff0581b9b14b12a605a2d44fb20a04975b8",
+          "message": "fix: atomic proxy-config writes, don't host-publish public ports, pass ACME email (#9)\n\n- the traefik/nginx/caddy backends write their config atomically (temp file + rename),\n  so the proxy's file watcher never reads a partial/garbled config mid-write\n- the Docker runtime only publishes a host port when one is requested; public\n  deployments are exposed on the container network only (no stray random host port)\n- the configured --acme-email is passed through to the orchestrator\n\nBumps to 0.3.3; depends on helyos-core 0.1.8.",
+          "timestamp": "2026-06-08T10:05:53Z",
+          "url": "https://github.com/helyos-labs/helyosd/commit/3b284ff0581b9b14b12a605a2d44fb20a04975b8"
+        },
+        "date": 1795454008524,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "encrypt/64B",
+            "value": 7033,
+            "range": "± 105",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/1KB",
+            "value": 8370,
+            "range": "± 569",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/64KB",
+            "value": 108171,
+            "range": "± 9954",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/64B",
+            "value": 3329,
+            "range": "± 54",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/1KB",
+            "value": 4375,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/10",
+            "value": 192,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/100",
+            "value": 191,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/1000",
+            "value": 200,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_register_deregister",
+            "value": 210,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "insert_pod",
+            "value": 399991,
+            "range": "± 31852",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/100",
+            "value": 520048,
+            "range": "± 85015",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/1000",
+            "value": 5392587,
+            "range": "± 778594",
             "unit": "ns/iter"
           }
         ]
